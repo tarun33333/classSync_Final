@@ -183,4 +183,74 @@ const getTeacherClasses = async (req, res) => {
     }
 };
 
-module.exports = { getTeacherRoutines, getTeacherTimetable, getStudentTimetable, getTeacherClasses };
+const getAllRoutines = async (req, res) => {
+    try {
+        const routines = await ClassRoutine.find({});
+        res.json(routines);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const createRoutine = async (req, res) => {
+    const { dept, batch, semester, class: classYear, timetable } = req.body;
+    try {
+        const newRoutine = new ClassRoutine({
+            dept,
+            batch,
+            semester,
+            class: classYear,
+            timetable
+        });
+        const savedRoutine = await newRoutine.save();
+        res.status(201).json(savedRoutine);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+const updateRoutine = async (req, res) => {
+    try {
+        const { timetable } = req.body;
+        const routine = await ClassRoutine.findById(req.params.id);
+        if (routine) {
+            routine.timetable = timetable || routine.timetable;
+            // Update other fields if needed
+            if (req.body.dept) routine.dept = req.body.dept;
+            if (req.body.batch) routine.batch = req.body.batch;
+            if (req.body.semester) routine.semester = req.body.semester;
+
+            const updatedRoutine = await routine.save();
+            res.json(updatedRoutine);
+        } else {
+            res.status(404).json({ message: 'Routine not found' });
+        }
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+const deleteRoutine = async (req, res) => {
+    try {
+        const routine = await ClassRoutine.findById(req.params.id);
+        if (routine) {
+            await routine.deleteOne();
+            res.json({ message: 'Routine removed' });
+        } else {
+            res.status(404).json({ message: 'Routine not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = {
+    getTeacherRoutines,
+    getTeacherTimetable,
+    getStudentTimetable,
+    getTeacherClasses,
+    getAllRoutines,
+    createRoutine,
+    updateRoutine,
+    deleteRoutine
+};
