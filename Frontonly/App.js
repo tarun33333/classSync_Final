@@ -126,6 +126,7 @@ const AppNav = () => {
             <Stack.Screen name="AIChat" component={AIChatScreen} options={{ title: 'AI Assistant', headerShown: true }} />
             <Stack.Screen name="StudentQuizJoin" component={StudentQuizJoinScreen} options={{ title: 'Join Live Quiz', headerShown: true }} />
             <Stack.Screen name="StudentQuiz" component={StudentQuizScreen} options={{ title: 'Quiz Time', headerShown: false }} />
+            <Stack.Screen name="FaceLiveness" component={require('./screens/FaceLivenessScreen').default} options={{ title: 'Live Verification', headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

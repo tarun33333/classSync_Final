@@ -19,6 +19,12 @@ const userSchema = new mongoose.Schema({
     isAdvisor: { type: Boolean, default: false },
     advisorBatch: { type: String }, // e.g. "2022-2026"
     advisorDept: { type: String }, // e.g. "CSE"
+
+    // Face Verification
+    faceEmbedding: { type: [Number], default: [] },
+    isFaceRegistered: { type: Boolean, default: false },
+
+
 }, { timestamps: true });
 
 userSchema.pre('save', async function (next) {

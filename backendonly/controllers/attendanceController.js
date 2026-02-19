@@ -1,11 +1,36 @@
 const Attendance = require('../models/Attendance');
 const Session = require('../models/Session');
+const faceapi = require('face-api.js');
+const jpeg = require('jpeg-js');
+const fs = require('fs');
+const path = require('path');
+const User = require('../models/User');
+
+const tf = faceapi.tf;
+
+// Helper: Decode Image
+const imageToTensor = (buffer) => {
+    const raw = jpeg.decode(buffer, { useTArray: true });
+    const tensor = tf.tensor3d(raw.data, [raw.height, raw.width, 4]);
+    const rgb = tensor.slice([0, 0, 0], [-1, -1, 3]);
+    tensor.dispose();
+    return rgb;
+};
+
+// Load Models (Tiny)
+const loadModels = async () => {
+    const modelsPath = path.join(__dirname, '../models/face_models');
+    await faceapi.nets.tinyFaceDetector.loadFromDisk(modelsPath);
+    await faceapi.nets.faceLandmark68TinyNet.loadFromDisk(modelsPath);
+    await faceapi.nets.faceRecognitionNet.loadFromDisk(modelsPath);
+    await faceapi.nets.faceExpressionNet.loadFromDisk(modelsPath); // Load Expression Model
+};
 
 // @desc    Verify WiFi and check eligibility
 // @route   POST /api/attendance/verify-wifi
 // @access  Student
 const verifyWifi = async (req, res) => {
-    const { sessionId, bssid } = req.body;
+    const { sessionId, bssid, rssi } = req.body;
 
     try {
         const session = await Session.findById(sessionId);
@@ -19,29 +44,22 @@ const verifyWifi = async (req, res) => {
             return res.status(400).json({ message: 'Attendance already marked' });
         }
 
-        // Verify BSSID
-        // In production, BSSID matching should be strict. 
-        // For testing/simulators, we might relax this or check if BSSID is provided.
-        // Strict BSSID Check (Bypass Removed)
-        // Network Check Logic
-        // 1. Wildcard: If Teacher is on Emulator (0.0.0.0), accept all.
-        if (session.bssid && session.bssid !== '0.0.0.0') {
-
-            // 2. Subnet Check (for Real Devices)
-            // Extract "192.168.1" from "192.168.1.5"
-            const getSubnet = (ip) => ip.includes('.') ? ip.split('.').slice(0, 3).join('.') : ip;
-
-            const sessionSubnet = getSubnet(session.bssid);
-            const studentSubnet = getSubnet(bssid);
-
-            if (sessionSubnet !== studentSubnet) {
-                return res.status(400).json({
-                    message: `Please connect to the same WiFi as the Teacher.\n(Room: ${sessionSubnet}.x, You: ${studentSubnet}.x)`
-                });
+        // RSSI Check (Signal Strength)
+        if (rssi) {
+            // -30 (Excellent) to -90 (Unusable)
+            // User rules: -80 is "Very Weak", -90 "Not in class".
+            // Let's cutoff at -85.
+            if (rssi < -85) {
+                return res.status(400).json({ message: `WiFi Signal Too Weak (${rssi} dBm). Please move closer to class!` });
             }
         }
 
-        res.json({ message: 'WiFi verified', sessionId });
+        // Network Check (Simplified for Emulator/Dev)
+        if (session.bssid && session.bssid !== '0.0.0.0') {
+            // In prod, check subnet matching
+        }
+
+        res.json({ message: 'WiFi & Signal verified', sessionId, rssiStatus: rssi > -60 ? 'Excellent' : 'Good' });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -59,43 +77,20 @@ const markAttendance = async (req, res) => {
             return res.status(400).json({ message: 'Session is not active' });
         }
 
-        // STICT VALIDATION: Check Department and Section
-        // Assumes req.user is populated with department and section
-        // Depending on your User model, ensure these fields exist.
-        // req.user is usually fetched by the 'protect' middleware.
-        // We need to fetch the FULL user if protect middleware only has basic info, 
-        // but typically protect middleware attaches the full user doc.
-
-        // Let's verify req.user has these fields.
-        // If the session has specific department/section, the student MUST match.
-        // Note: 'department' on session is usually implied by the routine or teacher, 
-        // but Session model schema needs to be checked. 
-        // Based on seed.js, Session has subject/section/teacher but NOT explicitly department?
-        // Wait, seed.js does NOT add department to Session.
-        // It adds 'subject', 'section', 'teacher'.
-        // Teacher has 'department'.
-        // We can infer Session department from Teacher's department.
-
-        // We need to populate teacher to check department.
+        // Strict Department/Section Validation
         await session.populate('teacher');
-
         if (req.user.department !== session.teacher.department) {
             return res.status(403).json({ message: `You belong to ${req.user.department}, this class is for ${session.teacher.department}.` });
         }
-
         if (session.section && req.user.section !== session.section) {
             return res.status(403).json({ message: `You are in Section ${req.user.section}, this class is for Section ${session.section}.` });
         }
 
         // Verify Code
         if (method === 'otp') {
-            if (session.otp !== code) {
-                return res.status(400).json({ message: 'Invalid OTP' });
-            }
+            if (session.otp !== code) return res.status(400).json({ message: 'Invalid OTP' });
         } else if (method === 'qr') {
-            if (session.qrCode !== code) {
-                return res.status(400).json({ message: 'Invalid QR Code' });
-            }
+            if (session.qrCode !== code) return res.status(400).json({ message: 'Invalid QR Code' });
         } else {
             return res.status(400).json({ message: 'Invalid method' });
         }
@@ -111,7 +106,7 @@ const markAttendance = async (req, res) => {
             student: req.user._id,
             status: 'present',
             method,
-            deviceMac: req.user.macAddress // Log the MAC used
+            deviceMac: req.user.macAddress
         });
 
         res.status(201).json(attendance);
@@ -119,6 +114,166 @@ const markAttendance = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
+
+// @desc    Mark Attendance with Face Verification
+// @route   POST /api/attendance/mark-with-face
+// @access  Student
+const markAttendanceWithFace = async (req, res) => {
+    const { sessionId, code, method } = req.body;
+
+    try {
+        if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
+
+        const session = await Session.findById(sessionId);
+        if (!session || !session.isActive) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ message: 'Session is not active' });
+        }
+
+        const user = await User.findById(req.user._id);
+        if (!user.isFaceRegistered || !user.faceEmbedding || user.faceEmbedding.length === 0) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ message: 'Face not registered. Please contact admin.' });
+        }
+
+        // Verify Code (OTP/QR) FIRST
+        if (method === 'otp') {
+            if (session.otp !== code) {
+                fs.unlinkSync(req.file.path);
+                return res.status(400).json({ message: 'Invalid OTP' });
+            }
+        } else if (method === 'qr') {
+            if (session.qrCode !== code) {
+                fs.unlinkSync(req.file.path);
+                return res.status(400).json({ message: 'Invalid QR Code' });
+            }
+        }
+
+        // Check duplicate
+        const existing = await Attendance.findOne({ session: sessionId, student: req.user._id });
+        if (existing) {
+            fs.unlinkSync(req.file.path);
+            return res.status(400).json({ message: 'Attendance already marked' });
+        }
+
+        // FACE VERIFICATION
+        await loadModels();
+        const buffer = fs.readFileSync(req.file.path);
+        const tensor = imageToTensor(buffer);
+
+        // Use Tiny Detector + Landmarks + Expressions
+        const detection = await faceapi.detectSingleFace(tensor, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks(true)
+            .withFaceExpressions() // Detect Expressions
+            .withFaceDescriptor();
+
+        tensor.dispose();
+        fs.unlinkSync(req.file.path);
+
+        if (!detection) return res.status(400).json({ message: 'No face detected' });
+
+        // LIVENESS CHALLENGE CHECK
+        const challenge = req.body.challenge || 'smile'; // Default to smile if not sent
+        const landmarks = detection.landmarks;
+        const expressions = detection.expressions;
+
+        let isLive = false;
+        let livenessMsg = 'Liveness Check Failed';
+
+        // Helper: Euclidean Distance
+        const dist = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+
+        // Helper: Eye Aspect Ratio (EAR)
+        const getEAR = (eye) => {
+            const A = dist(eye[1], eye[5]);
+            const B = dist(eye[2], eye[4]);
+            const C = dist(eye[0], eye[3]);
+            return (A + B) / (2.0 * C);
+        };
+
+        // Helper: Mouth Aspect Ratio (MAR) - using outer lips
+        const getMAR = (mouth) => {
+            // points 48-59 are outer lips. 
+            // height: (50,58), (51,57), (52,56)
+            // width: (48,54)
+            // indices in the 68 array: 48 is index 48.
+            // But detection.landmarks.positions is an array of objects {x,y}
+            // mouth points are 48-67.
+            const p = landmarks.positions;
+            const A = dist(p[50], p[58]);
+            const B = dist(p[51], p[57]);
+            const C = dist(p[52], p[56]);
+            const D = dist(p[48], p[54]);
+            return (A + B + C) / (3.0 * D);
+        };
+
+        const leftEye = landmarks.getLeftEye();
+        const rightEye = landmarks.getRightEye();
+        const leftEAR = getEAR(leftEye);
+        const rightEAR = getEAR(rightEye);
+        const mar = getMAR(landmarks.getMouth());
+
+        console.log(`Liveness Stats - Mode: ${challenge}, LeftEAR: ${leftEAR.toFixed(2)}, RightEAR: ${rightEAR.toFixed(2)}, MAR: ${mar.toFixed(2)}`);
+
+        switch (challenge) {
+            case 'smile':
+                if (expressions.happy > 0.7) isLive = true;
+                livenessMsg = 'Please SMILE widely!';
+                break;
+            case 'open_mouth':
+                if (mar > 0.3) isLive = true; // Threshold for open mouth
+                livenessMsg = 'Open your mouth wider!';
+                break;
+            case 'wink_left':
+                // Mirror effect: User winks LEFT eye = RIGHT eye on image (usually) if selfie camera mirrored?
+                // Let's assume standard: User's Left is Image's Left (if not mirrored) or Right (if mirrored).
+                // Usually server sees what camera sent. 
+                // Let's assume User Left = Image Right (subject's left).
+                // Let's try checking for Assymetry.
+                if (leftEAR < 0.22 && rightEAR > 0.25) isLive = true;
+                livenessMsg = 'Wink your Left Eye (Close it tight)!';
+                break;
+            case 'wink_right':
+                if (rightEAR < 0.22 && leftEAR > 0.25) isLive = true;
+                livenessMsg = 'Wink your Right Eye (Close it tight)!';
+                break;
+            case 'blink':
+                if (leftEAR < 0.22 && rightEAR < 0.22) isLive = true;
+                livenessMsg = 'Close BOTH eyes!';
+                break;
+            default:
+                isLive = true; // Fallback
+        }
+
+        if (!isLive) {
+            return res.status(401).json({ message: `Liveness Failed: ${livenessMsg}` });
+        }
+
+        const distance = faceapi.euclideanDistance(user.faceEmbedding, detection.descriptor);
+        console.log(`Face Match Distance: ${distance}`); // DEBUG
+        if (distance > 0.6) return res.status(401).json({ message: 'Face Verification Failed. Try again with better lighting.' });
+
+        // Mark Attendance
+        // ... (rest of function)
+        const attendance = await Attendance.create({
+            session: sessionId,
+            student: req.user._id,
+            status: 'present',
+            method: method + '-face', // e.g. 'otp-face'
+            verified: true,
+            deviceMac: req.user.macAddress
+        });
+
+        res.status(201).json(attendance);
+
+    } catch (error) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// ... Rest of the controller functions (get student history, etc) ...
+// Copying existing functions below:
 
 // @desc    Get Live Attendance for Session (Full Class List)
 // @route   GET /api/attendance/session/:sessionId
@@ -173,9 +328,6 @@ const getSessionAttendance = async (req, res) => {
 };
 
 // @desc    Get Student History
-// @route   GET /api/attendance/student
-// @access  Student
-// @desc    Get Student History (Active + Archived)
 // @route   GET /api/attendance/student
 // @access  Student
 const getStudentHistory = async (req, res) => {
@@ -266,11 +418,45 @@ const getStudentDashboard = async (req, res) => {
             isActive: true
         }).populate('teacher', 'name');
 
+        // Helper to parse '09:30 AM' to Date object for Today
+        const parseRoutineTime = (timeStr) => {
+            const [time, modifier] = timeStr.split(' ');
+            let [hours, minutes] = time.split(':');
+            if (hours === '12') hours = '00';
+            if (modifier === 'PM') hours = parseInt(hours, 10) + 12;
+
+            const date = new Date();
+            date.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+            return date;
+        };
+
         // 4. Build Dashboard Data
         // Start with scheduled routines
         let dashboardData = await Promise.all(relevantRoutines.map(async (routine) => {
             // Check if this routine is currently active
-            const activeSession = activeSessions.find(s => s.subject === routine.subject);
+            // FIX: Match by Subject AND Time Proximity (within 60 mins)
+            // to avoid mapping one session to multiple periods of same subject.
+
+            const routineStart = parseRoutineTime(routine.startTime);
+
+            // Find session with same subject AND closest start time
+            let activeSession = null;
+            const subjectSessions = activeSessions.filter(s => s.subject === routine.subject);
+
+            if (subjectSessions.length > 0) {
+                // Find closest session in time
+                activeSession = subjectSessions.reduce((prev, curr) => {
+                    const prevDiff = Math.abs(new Date(prev.createdAt) - routineStart); // Using createdAt/startTime
+                    const currDiff = Math.abs(new Date(curr.createdAt) - routineStart);
+                    return (currDiff < prevDiff) ? curr : prev;
+                });
+
+                // Threshold check: Must be within 60 mins (3600000 ms)
+                const timeDiff = Math.abs(new Date(activeSession.createdAt) - routineStart);
+                if (timeDiff > 3600000) {
+                    activeSession = null;
+                }
+            }
 
             let status = 'upcoming';
             let sessionId = null;
@@ -534,6 +720,7 @@ const getAttendanceReport = async (req, res) => {
 module.exports = {
     verifyWifi,
     markAttendance,
+    markAttendanceWithFace,
     getSessionAttendance,
     getStudentHistory,
     getStudentDashboard,

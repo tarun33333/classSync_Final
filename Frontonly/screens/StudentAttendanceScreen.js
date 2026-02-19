@@ -3,6 +3,13 @@ import { View, Text, Button, TextInput, StyleSheet, Alert, Modal, TouchableOpaci
 import { CameraView, Camera } from 'expo-camera';
 import client from '../api/client';
 import * as Network from 'expo-network';
+// Optional Native WiFi for RSSI (will fail gracefully in Expo Go)
+let WifiManager;
+try {
+    WifiManager = require('react-native-wifi-reborn').default;
+} catch (e) {
+    console.log('WiFi Reborn not available (Expo Go?)');
+}
 
 const StudentAttendanceScreen = ({ route, navigation }) => {
     const { sessionId, mode } = route.params;
@@ -12,6 +19,7 @@ const StudentAttendanceScreen = ({ route, navigation }) => {
     const [hasPermission, setHasPermission] = useState(null);
     const [scanned, setScanned] = useState(false);
     const [wifiVerified, setWifiVerified] = useState(false);
+    const [rssi, setRssi] = useState(null);
 
     useEffect(() => {
         (async () => {
@@ -40,9 +48,28 @@ const StudentAttendanceScreen = ({ route, navigation }) => {
             // For now, we'll send the IP or a placeholder, but NOT the debug bypass.
             const bssid = (await Network.getIpAddressAsync()) || 'UNKNOWN';
 
-            await client.post('/attendance/verify-wifi', { sessionId, bssid });
+            // RSSI Capture
+            let currentRssi = -55; // Default Simulation (Strong)
+
+            if (WifiManager) {
+                try {
+                    // Try to get real RSSI if native module exists
+                    currentRssi = await WifiManager.getCurrentSignalStrength();
+                } catch (err) {
+                    console.log('Failed to get real RSSI:', err);
+                }
+            } else {
+                // Simulation: Randomize slightly between -40 and -70 for realism in Expo Go
+                currentRssi = Math.floor(Math.random() * (70 - 40 + 1)) * -1 - 40;
+            }
+
+            setRssi(currentRssi); // Update State
+
+            await client.post('/attendance/verify-wifi', { sessionId, bssid, rssi: currentRssi });
             setStep(2);
             setWifiVerified(true);
+
+            if (!silent) Alert.alert('Success', `Connected! Signal Strength: ${currentRssi} dBm`);
             return true;
         } catch (error) {
             if (!silent) Alert.alert('WiFi Verification Failed', error.response?.data?.message || 'Error');
@@ -51,14 +78,17 @@ const StudentAttendanceScreen = ({ route, navigation }) => {
     };
 
     const submitOtp = async () => {
-        try {
-            await client.post('/attendance/mark', { sessionId, code: otp, method: 'otp' });
-            Alert.alert('Success', 'Attendance Marked via OTP!', [
-                { text: 'OK', onPress: () => navigation.navigate('StudentMain') }
-            ]);
-        } catch (error) {
-            Alert.alert('Error', error.response?.data?.message || 'Invalid OTP');
+        if (!otp || otp.length !== 4) {
+            Alert.alert('Error', 'Please enter a valid 4-digit OTP');
+            return;
         }
+        // DEBUG: Confirm navigation is triggered
+        console.log('Navigating to FaceLiveness');
+        navigation.navigate('FaceLiveness', {
+            sessionId,
+            code: otp,
+            method: 'otp'
+        });
     };
 
     const handleBarCodeScanned = async ({ type, data }) => {

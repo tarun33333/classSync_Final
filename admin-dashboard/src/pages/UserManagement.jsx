@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import AdminFaceManagement from '../components/AdminFaceManagement';
+
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const [showFaceModal, setShowFaceModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
+
     const [formData, setFormData] = useState({
         name: '', email: '', password: '', role: 'student',
         department: '', section: '', rollNumber: '', batch: '',
@@ -153,7 +158,14 @@ const UserManagement = () => {
                                     <td className="px-6 py-4 whitespace-nowrap">{user.department || '-'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         {/* <button className="text-indigo-600 hover:text-indigo-900 mr-4">Edit</button> */}
-                                        <button onClick={() => handleDelete(user._id)} className="text-red-600 hover:text-red-900">Delete</button>
+                                        <button onClick={() => handleDelete(user._id)} className="text-red-600 hover:text-red-900 mr-4">Delete</button>
+                                        <button
+                                            onClick={() => { setSelectedUser(user._id); setShowFaceModal(true); }}
+                                            className="text-blue-600 hover:text-blue-900"
+                                        >
+                                            {user.isFaceRegistered ? 'Update Face' : 'Add Face'}
+                                        </button>
+
                                     </td>
                                 </tr>
                             ))
@@ -161,6 +173,15 @@ const UserManagement = () => {
                     </tbody>
                 </table>
             </div>
+
+
+            {showFaceModal && selectedUser && (
+                <AdminFaceManagement
+                    userId={selectedUser}
+                    onClose={() => setShowFaceModal(false)}
+                    onSuccess={fetchUsers}
+                />
+            )}
         </div>
     );
 };

@@ -4,7 +4,7 @@ const attendanceSchema = new mongoose.Schema({
     session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
     student: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: { type: String, enum: ['present', 'absent'], default: 'present' },
-    method: { type: String, enum: ['wifi', 'otp', 'qr', 'manual','od'], required: true },
+    method: { type: String, enum: ['wifi', 'otp', 'qr', 'manual', 'od', 'otp-face', 'qr-face'], required: true },
     verified: { type: Boolean, default: true },
     timestamp: { type: Date, default: Date.now },
     deviceMac: { type: String } // MAC used for this attendance

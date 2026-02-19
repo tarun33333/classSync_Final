@@ -23,6 +23,7 @@
     "expo-dev-client": "~6.0.20",
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
+    "expo-face-detector": "^13.0.2",
     "expo-file-system": "~19.0.20",
     "expo-network": "~8.0.7",
     "expo-notifications": "~0.32.14",
