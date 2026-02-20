@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, StatusBar } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
 import * as DocumentPicker from 'expo-document-picker';
+import { useTheme } from '../context/ThemeContext';
 
 const QuizGenScreen = () => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const [topic, setTopic] = useState('');
     const [loading, setLoading] = useState(false);
     const [quizData, setQuizData] = useState(null);
@@ -330,9 +335,12 @@ const QuizGenScreen = () => {
 
     if (loading) {
         return (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4A90E2" />
-                <Text style={styles.loadingText}>Processing...</Text>
+            <View style={styles.root}>
+                <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={COLORS.accent} />
+                    <Text style={styles.loadingText}>Processing...</Text>
+                </View>
             </View>
         );
     }
@@ -341,10 +349,11 @@ const QuizGenScreen = () => {
     if (activeTab === 'results') {
         const top5 = leaderboard.slice(0, 5);
         return (
-            <View style={styles.container}>
+            <View style={styles.root}>
+                <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+                <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
                 <View style={[styles.liveCard, { justifyContent: 'flex-start', paddingTop: 40 }]}>
                     <Text style={styles.liveTitle}>🏆 Top 5 Performers</Text>
-
                     <ScrollView style={{ width: '100%', marginTop: 20 }}>
                         {top5.map((result, index) => (
                             <View key={index} style={styles.rankCard}>
@@ -356,10 +365,9 @@ const QuizGenScreen = () => {
                                 {index === 0 && <Ionicons name="trophy" size={30} color="#FFD700" />}
                             </View>
                         ))}
-                        {top5.length === 0 && <Text style={{ textAlign: 'center', color: '#666' }}>No results yet.</Text>}
+                        {top5.length === 0 && <Text style={{ textAlign: 'center', color: COLORS.textSecondary }}>No results yet.</Text>}
                     </ScrollView>
-
-                    <TouchableOpacity style={[styles.button, { marginTop: 20, backgroundColor: '#4A90E2', width: '100%' }]} onPress={resetQuiz}>
+                    <TouchableOpacity style={[styles.button, { marginTop: 20, width: '100%' }]} onPress={resetQuiz}>
                         <Text style={styles.buttonText}>Back to Library</Text>
                     </TouchableOpacity>
                 </View>
@@ -370,22 +378,18 @@ const QuizGenScreen = () => {
     // --- HOSTING LOBBY (Live) ---
     if (activeTab === 'live_lobby') {
         return (
-            <View style={styles.container}>
+            <View style={styles.root}>
+                <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+                <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
                 <View style={styles.liveCard}>
                     <Text style={styles.liveTitle}>
                         {gameStatus === 'WAITING' ? 'Lobby Open ⏳' : 'Quiz in Progress 🚀'}
                     </Text>
-
                     <View style={styles.codeBox}>
                         <Text style={styles.codeLabel}>JOIN CODE</Text>
                         <Text style={styles.codeText}>{quizCode || '...'}</Text>
                     </View>
-
-                    <Text style={[styles.subText, { fontSize: 18, marginBottom: 10 }]}>
-                        {participants.length} Students Joined
-                    </Text>
-
-                    {/* Scrollable Participant List */}
+                    <Text style={[styles.subText, { fontSize: 18, marginBottom: 10 }]}>{participants.length} Students Joined</Text>
                     <View style={styles.participantList}>
                         <ScrollView>
                             {participants.map((p, idx) => (
@@ -393,18 +397,14 @@ const QuizGenScreen = () => {
                             ))}
                         </ScrollView>
                     </View>
-
                     {gameStatus === 'WAITING' ? (
-                        <TouchableOpacity style={[styles.button, { marginTop: 20, backgroundColor: '#2ecc71', width: '100%' }]} onPress={handleStartGame}>
+                        <TouchableOpacity style={[styles.button, { marginTop: 20, backgroundColor: COLORS.success, width: '100%' }]} onPress={handleStartGame}>
                             <Text style={styles.buttonText}>Start Quiz ▶</Text>
                         </TouchableOpacity>
                     ) : (
-                        <Text style={{ color: '#2ecc71', fontWeight: 'bold', marginVertical: 20, fontSize: 18 }}>
-                            Students are playing...
-                        </Text>
+                        <Text style={{ color: COLORS.success, fontWeight: 'bold', marginVertical: 20, fontSize: 18 }}>Students are playing...</Text>
                     )}
-
-                    <TouchableOpacity style={[styles.button, { marginTop: 10, backgroundColor: '#FF3B30' }]} onPress={handleEndGame}>
+                    <TouchableOpacity style={[styles.button, { marginTop: 10, backgroundColor: COLORS.danger }]} onPress={handleEndGame}>
                         <Text style={styles.buttonText}>End Quiz ⏹</Text>
                     </TouchableOpacity>
                 </View>
@@ -415,125 +415,106 @@ const QuizGenScreen = () => {
     // --- 1. My Library Tab ---
     if (activeTab === 'library') {
         return (
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>My Quiz Library 📚</Text>
-                </View>
-                {/* Tab Switcher */}
-                <View style={styles.topTabs}>
-                    <TouchableOpacity style={styles.inactiveTabBtn} onPress={() => setActiveTab('gen')}>
-                        <Text style={styles.inactiveTabText}>Create New</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.activeTabBtn}>
-                        <Text style={styles.activeTabText}>My Library</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-                    {savedQuizzes.length === 0 ? (
-                        <Text style={styles.emptyText}>No saved quizzes yet.</Text>
-                    ) : (
-                        savedQuizzes.map((quiz) => (
-                            <View key={quiz._id} style={styles.quizCard}>
-                                <View>
-                                    <Text style={styles.quizTitle}>{quiz.title}</Text>
-                                    <Text style={styles.quizSub}>{quiz.questions.length} Questions • {new Date(quiz.createdAt).toLocaleDateString()}</Text>
+            <View style={styles.root}>
+                <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+                <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+                <View style={styles.container}>
+                    <View style={styles.header}>
+                        <Text style={styles.title}>My Quiz Library 📚</Text>
+                    </View>
+                    <View style={styles.topTabs}>
+                        <TouchableOpacity style={styles.inactiveTabBtn} onPress={() => setActiveTab('gen')}>
+                            <Text style={styles.inactiveTabText}>Create New</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.activeTabBtn}>
+                            <Text style={styles.activeTabText}>My Library</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+                        {savedQuizzes.length === 0 ? (
+                            <Text style={styles.emptyText}>No saved quizzes yet.</Text>
+                        ) : (
+                            savedQuizzes.map((quiz) => (
+                                <View key={quiz._id} style={styles.quizCard}>
+                                    <View>
+                                        <Text style={styles.quizTitle}>{quiz.title}</Text>
+                                        <Text style={styles.quizSub}>{quiz.questions.length} Questions • {new Date(quiz.createdAt).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={styles.cardActions}>
+                                        <TouchableOpacity style={styles.actionBtn} onPress={() => startHosting(quiz._id)}>
+                                            <Ionicons name="play-circle" size={24} color={COLORS.success} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.actionBtn} onPress={() => editExistingQuiz(quiz)}>
+                                            <Ionicons name="create" size={24} color={COLORS.warning} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.actionBtn} onPress={() => deleteQuiz(quiz._id)}>
+                                            <Ionicons name="trash" size={24} color={COLORS.danger} />
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
-                                <View style={styles.cardActions}>
-                                    <TouchableOpacity style={styles.actionBtn} onPress={() => startHosting(quiz._id)}>
-                                        <Ionicons name="play-circle" size={24} color="#2ecc71" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.actionBtn} onPress={() => editExistingQuiz(quiz)}>
-                                        <Ionicons name="create" size={24} color="#f1c40f" />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.actionBtn} onPress={() => deleteQuiz(quiz._id)}>
-                                        <Ionicons name="trash" size={24} color="#e74c3c" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        ))
-                    )}
-                </ScrollView>
+                            ))
+                        )}
+                    </ScrollView>
+                </View>
             </View>
         );
     }
 
     // --- 2. Editor / Generator Tab ---
     if (quizData) {
-        // EDITOR INTERFACE (Editable)
         const question = quizData[currentQuestionIndex];
         return (
-            <View style={styles.container}>
-                <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => { setQuizData(null); setEditingQuiz(null); }}>
-                        <Ionicons name="arrow-back" size={24} color="#333" />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>{editingQuiz ? 'Editing Quiz' : 'Review & Edit'}</Text>
-                    <View style={{ width: 24 }} />
-                </View>
-
-                <View style={styles.progressHeader}>
-                    <TouchableOpacity onPress={removeCurrentQuestion}>
-                        <Ionicons name="trash" size={24} color="#e74c3c" />
-                    </TouchableOpacity>
-                    <Text style={styles.progressText}>Q {currentQuestionIndex + 1} / {quizData.length}</Text>
-                    <TouchableOpacity onPress={addNewQuestion}>
-                        <Ionicons name="add-circle" size={24} color="#4A90E2" />
-                    </TouchableOpacity>
-                </View>
-
-                <ScrollView>
-                    <View style={styles.editCard}>
-                        <Text style={styles.label}>Question:</Text>
-                        <TextInput
-                            style={styles.editInput}
-                            multiline
-                            value={question.question}
-                            onChangeText={(t) => updateQuestionText(t, currentQuestionIndex)}
-                        />
-
-                        <Text style={styles.label}>Options (Tap option to set correct answer):</Text>
-                        {question.options.map((opt, idx) => (
-                            <View key={idx} style={styles.optionRow}>
-                                <TouchableOpacity
-                                    style={[styles.radio, question.correctAnswer === idx && styles.radioActive]}
-                                    onPress={() => setCorrectOption(currentQuestionIndex, idx)}
-                                >
-                                    {question.correctAnswer === idx && <View style={styles.radioInner} />}
-                                </TouchableOpacity>
-                                <TextInput
-                                    style={styles.optionInput}
-                                    value={opt}
-                                    onChangeText={(t) => updateOptionText(t, currentQuestionIndex, idx)}
-                                />
-                            </View>
-                        ))}
+            <View style={styles.root}>
+                <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+                <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+                <View style={styles.container}>
+                    <View style={styles.headerRow}>
+                        <TouchableOpacity onPress={() => { setQuizData(null); setEditingQuiz(null); }}>
+                            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>{editingQuiz ? 'Editing Quiz' : 'Review & Edit'}</Text>
+                        <View style={{ width: 24 }} />
                     </View>
-                </ScrollView>
-
-                <View style={styles.footerRow}>
-                    <TouchableOpacity style={styles.secondaryBtn} onPress={saveChanges}>
-                        <Text style={styles.secondaryBtnText}>Save Only</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.primaryBtn} onPress={editingQuiz ? saveChanges : saveAndHostQuiz}>
-                        <Text style={styles.primaryBtnText}>{editingQuiz ? 'Update Quiz' : 'Save & Host'}</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Navigation Arrows */}
-                <View style={styles.navRow}>
-                    <TouchableOpacity
-                        disabled={currentQuestionIndex === 0}
-                        onPress={() => setCurrentQuestionIndex(prev => prev - 1)}
-                    >
-                        <Ionicons name="chevron-back" size={30} color={currentQuestionIndex === 0 ? "#ccc" : "#4A90E2"} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        disabled={currentQuestionIndex === quizData.length - 1}
-                        onPress={() => setCurrentQuestionIndex(prev => prev + 1)}
-                    >
-                        <Ionicons name="chevron-forward" size={30} color={currentQuestionIndex === quizData.length - 1 ? "#ccc" : "#4A90E2"} />
-                    </TouchableOpacity>
+                    <View style={styles.progressHeader}>
+                        <TouchableOpacity onPress={removeCurrentQuestion}>
+                            <Ionicons name="trash" size={24} color={COLORS.danger} />
+                        </TouchableOpacity>
+                        <Text style={styles.progressText}>Q {currentQuestionIndex + 1} / {quizData.length}</Text>
+                        <TouchableOpacity onPress={addNewQuestion}>
+                            <Ionicons name="add-circle" size={24} color={COLORS.accent} />
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView>
+                        <View style={styles.editCard}>
+                            <Text style={styles.label}>Question:</Text>
+                            <TextInput style={styles.editInput} multiline value={question.question} onChangeText={(t) => updateQuestionText(t, currentQuestionIndex)} placeholderTextColor={COLORS.textMuted} />
+                            <Text style={styles.label}>Options (Tap to set correct):</Text>
+                            {question.options.map((opt, idx) => (
+                                <View key={idx} style={styles.optionRow}>
+                                    <TouchableOpacity style={[styles.radio, question.correctAnswer === idx && styles.radioActive]} onPress={() => setCorrectOption(currentQuestionIndex, idx)}>
+                                        {question.correctAnswer === idx && <View style={styles.radioInner} />}
+                                    </TouchableOpacity>
+                                    <TextInput style={styles.optionInput} value={opt} onChangeText={(t) => updateOptionText(t, currentQuestionIndex, idx)} placeholderTextColor={COLORS.textMuted} />
+                                </View>
+                            ))}
+                        </View>
+                    </ScrollView>
+                    <View style={styles.footerRow}>
+                        <TouchableOpacity style={styles.secondaryBtn} onPress={saveChanges}>
+                            <Text style={styles.secondaryBtnText}>Save Only</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.primaryBtn} onPress={editingQuiz ? saveChanges : saveAndHostQuiz}>
+                            <Text style={styles.primaryBtnText}>{editingQuiz ? 'Update Quiz' : 'Save & Host'}</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.navRow}>
+                        <TouchableOpacity disabled={currentQuestionIndex === 0} onPress={() => setCurrentQuestionIndex(prev => prev - 1)}>
+                            <Ionicons name="chevron-back" size={30} color={currentQuestionIndex === 0 ? COLORS.textMuted : COLORS.accent} />
+                        </TouchableOpacity>
+                        <TouchableOpacity disabled={currentQuestionIndex === quizData.length - 1} onPress={() => setCurrentQuestionIndex(prev => prev + 1)}>
+                            <Ionicons name="chevron-forward" size={30} color={currentQuestionIndex === quizData.length - 1 ? COLORS.textMuted : COLORS.accent} />
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         );
@@ -541,138 +522,119 @@ const QuizGenScreen = () => {
 
     // Default: Generator Form
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>AI Quiz Generator ✨</Text>
-            </View>
-            {/* Tab Switcher */}
-            <View style={styles.topTabs}>
-                <TouchableOpacity style={styles.activeTabBtn}>
-                    <Text style={styles.activeTabText}>Create New</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.inactiveTabBtn} onPress={() => setActiveTab('library')}>
-                    <Text style={styles.inactiveTabText}>My Library</Text>
-                </TouchableOpacity>
-            </View>
-
-            <View style={styles.form}>
-                <View style={styles.tabs}>
-                    <TouchableOpacity
-                        style={[styles.tab, mode === 'topic' && styles.activeTab]}
-                        onPress={() => setMode('topic')}
-                    >
-                        <Text style={[styles.tabText, mode === 'topic' && styles.activeTabText]}>By Topic</Text>
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+            <View style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>AI Quiz Generator ✨</Text>
+                </View>
+                <View style={styles.topTabs}>
+                    <TouchableOpacity style={styles.activeTabBtn}>
+                        <Text style={styles.activeTabText}>Create New</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.tab, mode === 'doc' && styles.activeTab]}
-                        onPress={() => setMode('doc')}
-                    >
-                        <Text style={[styles.tabText, mode === 'doc' && styles.activeTabText]}>From File</Text>
+                    <TouchableOpacity style={styles.inactiveTabBtn} onPress={() => setActiveTab('library')}>
+                        <Text style={styles.inactiveTabText}>My Library</Text>
                     </TouchableOpacity>
                 </View>
-
-                {mode === 'topic' ? (
-                    <>
-                        <Text style={styles.label}>Quiz Topic</Text>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="e.g., Python Basics"
-                            value={topic}
-                            onChangeText={setTopic}
-                        />
-                    </>
-                ) : (
-                    <>
-                        <Text style={styles.label}>Upload Document (PDF/Text)</Text>
-                        <TouchableOpacity style={styles.fileBtn} onPress={pickDocument}>
-                            <Ionicons name={selectedFile ? "document" : "cloud-upload"} size={24} color="#666" />
-                            <Text style={styles.fileBtnText}>
-                                {selectedFile ? selectedFile.name : "Select File"}
-                            </Text>
+                <View style={styles.form}>
+                    <View style={styles.tabs}>
+                        <TouchableOpacity style={[styles.tab, mode === 'topic' && styles.activeTab]} onPress={() => setMode('topic')}>
+                            <Text style={[styles.tabText, mode === 'topic' && { color: COLORS.accent, fontWeight: 'bold' }]}>By Topic</Text>
                         </TouchableOpacity>
-                    </>
-                )}
-
-                <TouchableOpacity style={styles.button} onPress={generateQuiz}>
-                    <Text style={styles.buttonText}>Generate with AI</Text>
-                    <Ionicons name="sparkles" size={20} color="#FFF" style={{ marginLeft: 10 }} />
-                </TouchableOpacity>
+                        <TouchableOpacity style={[styles.tab, mode === 'doc' && styles.activeTab]} onPress={() => setMode('doc')}>
+                            <Text style={[styles.tabText, mode === 'doc' && { color: COLORS.accent, fontWeight: 'bold' }]}>From File</Text>
+                        </TouchableOpacity>
+                    </View>
+                    {mode === 'topic' ? (
+                        <>
+                            <Text style={styles.label}>Quiz Topic</Text>
+                            <TextInput style={styles.input} placeholder="e.g., Python Basics" placeholderTextColor={COLORS.textMuted} value={topic} onChangeText={setTopic} />
+                        </>
+                    ) : (
+                        <>
+                            <Text style={styles.label}>Upload Document (PDF/Text)</Text>
+                            <TouchableOpacity style={styles.fileBtn} onPress={pickDocument}>
+                                <Ionicons name={selectedFile ? "document" : "cloud-upload"} size={24} color={COLORS.textSecondary} />
+                                <Text style={styles.fileBtnText}>{selectedFile ? selectedFile.name : "Select File"}</Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
+                    <TouchableOpacity style={styles.button} onPress={generateQuiz}>
+                        <Text style={styles.buttonText}>Generate with AI</Text>
+                        <Ionicons name="sparkles" size={20} color="#FFF" style={{ marginLeft: 10 }} />
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFFFFF', padding: 20 },
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1, padding: 20 },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    loadingText: { marginTop: 20, fontSize: 16, color: '#666' },
+    loadingText: { marginTop: 20, fontSize: 16, color: COLORS.textSecondary },
     header: { marginTop: 40, marginBottom: 20 },
-    title: { fontSize: 24, fontWeight: 'bold', color: '#1A1A1A' },
+    title: { fontSize: 24, fontWeight: 'bold', color: COLORS.textPrimary },
 
-    // Tabs
-    topTabs: { flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderColor: '#eee' },
-    activeTabBtn: { flex: 1, paddingVertical: 10, borderBottomWidth: 2, borderColor: '#4A90E2', alignItems: 'center' },
+    topTabs: { flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderColor: COLORS.border },
+    activeTabBtn: { flex: 1, paddingVertical: 10, borderBottomWidth: 2, borderColor: COLORS.accent, alignItems: 'center' },
     inactiveTabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-    activeTabText: { color: '#4A90E2', fontWeight: 'bold' },
-    inactiveTabText: { color: '#999', fontWeight: 'bold' },
+    activeTabText: { color: COLORS.accent, fontWeight: 'bold' },
+    inactiveTabText: { color: COLORS.textMuted, fontWeight: 'bold' },
 
-    // Library List
-    quizCard: { backgroundColor: '#f9f9f9', padding: 15, borderRadius: 12, marginBottom: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    quizTitle: { fontWeight: 'bold', fontSize: 16, color: '#333' },
-    quizSub: { color: '#666', fontSize: 12, marginTop: 4 },
-    cardActions: { flexDirection: 'row', gap: 15 },
+    quizCard: { backgroundColor: COLORS.bgCard, padding: 15, borderRadius: 14, marginBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+    quizTitle: { fontWeight: 'bold', fontSize: 15, color: COLORS.textPrimary },
+    quizSub: { color: COLORS.textSecondary, fontSize: 12, marginTop: 4 },
+    cardActions: { flexDirection: 'row', gap: 14 },
     actionBtn: { padding: 5 },
-    emptyText: { textAlign: 'center', color: '#999', marginTop: 50 },
+    emptyText: { textAlign: 'center', color: COLORS.textMuted, marginTop: 50 },
 
-    // Editor Styles
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 40, marginBottom: 20 },
-    headerTitle: { fontSize: 18, fontWeight: 'bold' },
-    editCard: { backgroundColor: '#F5F9FF', padding: 15, borderRadius: 12, marginBottom: 20 },
-    editInput: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 15, minHeight: 60 },
+    headerTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.textPrimary },
+    editCard: { backgroundColor: COLORS.bgCard, padding: 15, borderRadius: 14, marginBottom: 18, borderWidth: 1, borderColor: COLORS.border },
+    editInput: { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 10, fontSize: 15, color: COLORS.textPrimary, marginBottom: 14, minHeight: 60 },
     optionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-    optionInput: { flex: 1, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 8, fontSize: 14 },
-    radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#ccc', marginRight: 10, justifyContent: 'center', alignItems: 'center' },
-    radioActive: { borderColor: '#4A90E2' },
-    radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#4A90E2' },
+    optionInput: { flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 8, fontSize: 13, color: COLORS.textPrimary },
+    radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: COLORS.border, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+    radioActive: { borderColor: COLORS.accent },
+    radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.accent },
 
-    // Navigation
     navRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, paddingHorizontal: 20 },
     footerRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-    primaryBtn: { flex: 1, backgroundColor: '#4A90E2', padding: 15, borderRadius: 10, alignItems: 'center' },
+    primaryBtn: { flex: 1, backgroundColor: COLORS.accent, padding: 15, borderRadius: 12, alignItems: 'center' },
     primaryBtnText: { color: '#FFF', fontWeight: 'bold' },
-    secondaryBtn: { flex: 1, backgroundColor: '#ddd', padding: 15, borderRadius: 10, alignItems: 'center' },
-    secondaryBtnText: { color: '#333', fontWeight: 'bold' },
+    secondaryBtn: { flex: 1, backgroundColor: COLORS.bgCard, padding: 15, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+    secondaryBtnText: { color: COLORS.textSecondary, fontWeight: 'bold' },
 
-    // Existing Styles
     form: {},
-    label: { fontSize: 16, fontWeight: '600', marginBottom: 10, color: '#333' },
-    input: { backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#E1E1E1', borderRadius: 12, padding: 15, fontSize: 16, marginBottom: 20 },
-    button: { backgroundColor: '#4A90E2', padding: 18, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-    buttonText: { color: '#FFF', fontSize: 18, fontWeight: 'bold' },
-    tabs: { flexDirection: 'row', backgroundColor: '#F0F0F0', borderRadius: 10, padding: 5, marginBottom: 20 },
-    tab: { flex: 1, padding: 10, alignItems: 'center', borderRadius: 8 },
-    activeTab: { backgroundColor: '#FFF', elevation: 2 },
-    tabText: { fontWeight: '600', color: '#666' },
-    fileBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#E1E1E1', padding: 15, borderRadius: 12, marginBottom: 20 },
-    fileBtnText: { marginLeft: 10, fontSize: 16, color: '#333' },
+    label: { fontSize: 15, fontWeight: '600', marginBottom: 10, color: COLORS.textSecondary },
+    input: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.textPrimary, marginBottom: 18 },
+    button: { backgroundColor: COLORS.accent, padding: 18, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    buttonText: { color: '#FFF', fontSize: 17, fontWeight: 'bold' },
+    tabs: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12, padding: 4, marginBottom: 18, borderWidth: 1, borderColor: COLORS.border },
+    tab: { flex: 1, padding: 10, alignItems: 'center', borderRadius: 10 },
+    activeTab: { backgroundColor: COLORS.accentLight },
+    tabText: { fontWeight: '600', color: COLORS.textSecondary },
+    fileBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, padding: 14, borderRadius: 12, marginBottom: 18 },
+    fileBtnText: { marginLeft: 10, fontSize: 15, color: COLORS.textPrimary },
 
-    // Live
-    liveCard: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    liveTitle: { fontSize: 28, fontWeight: 'bold', color: '#FF3B30', marginBottom: 20 },
-    codeBox: { alignItems: 'center', marginVertical: 20, backgroundColor: '#FFF', padding: 20, borderRadius: 15, elevation: 5 },
-    codeLabel: { fontSize: 16, color: '#666', letterSpacing: 1 },
-    codeText: { fontSize: 60, fontWeight: 'bold', color: '#333', marginVertical: 10, letterSpacing: 5 },
-    subText: { fontSize: 16, color: '#666', marginTop: 10 },
-    participantList: { width: '100%', maxHeight: 200, marginVertical: 20, backgroundColor: '#F8F9FA', borderRadius: 10, padding: 10 },
-    participantName: { fontSize: 18, color: '#333', paddingVertical: 8, paddingHorizontal: 15, borderBottomWidth: 1, borderBottomColor: '#EEE', textAlign: 'center' },
-    progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    progressText: { fontSize: 16, fontWeight: 'bold', color: '#666' },
+    liveCard: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    liveTitle: { fontSize: 26, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 20 },
+    codeBox: { alignItems: 'center', marginVertical: 20, backgroundColor: COLORS.bgCard, padding: 20, borderRadius: 18, borderWidth: 2, borderColor: COLORS.accent },
+    codeLabel: { fontSize: 14, color: COLORS.textSecondary, letterSpacing: 2 },
+    codeText: { fontSize: 58, fontWeight: 'bold', color: COLORS.accent, marginVertical: 10, letterSpacing: 5 },
+    subText: { fontSize: 15, color: COLORS.textSecondary, marginTop: 10 },
+    participantList: { width: '100%', maxHeight: 200, marginVertical: 18, backgroundColor: COLORS.bgCard, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: COLORS.border },
+    participantName: { fontSize: 16, color: COLORS.textPrimary, paddingVertical: 8, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, textAlign: 'center' },
+    progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
+    progressText: { fontSize: 15, fontWeight: 'bold', color: COLORS.textSecondary },
 
-    // Leaderboard
-    rankCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 2 },
-    rankNumber: { fontSize: 24, fontWeight: 'bold', color: '#4A90E2', width: 40, textAlign: 'center' },
-    rankName: { fontSize: 18, fontWeight: '600', color: '#333' },
-    rankScore: { fontSize: 14, color: '#666', marginTop: 4 }
+    rankCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.bgCard, padding: 14, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
+    rankNumber: { fontSize: 22, fontWeight: 'bold', color: COLORS.accent, width: 40, textAlign: 'center' },
+    rankName: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
+    rankScore: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4 },
 });
 
 export default QuizGenScreen;

@@ -1,15 +1,31 @@
-import React, { useContext, useState, useEffect } from 'react';
-import LoadingScreen from '../components/LoadingScreen';
-import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator, Image, TouchableOpacity } from 'react-native';
+import React, { useContext, useState, useEffect, useRef } from 'react';
+import {
+    View,
+    StyleSheet,
+    KeyboardAvoidingView,
+    Platform,
+    Dimensions,
+    Animated,
+} from 'react-native';
+import { TextInput, Button, Text, HelperText } from 'react-native-paper';
 import { AuthContext } from '../context/AuthContext';
 import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+import LoadingScreen from '../components/LoadingScreen';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width, height } = Dimensions.get('window');
 
 const LoginScreen = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [secureTextEntry, setSecureTextEntry] = useState(true);
     const { login, isLoading } = useContext(AuthContext);
     const [deviceId, setDeviceId] = useState(null);
+    const [errorMessage, setErrorMessage] = useState('');
+
+    // Subtle fade-in animation for the card using built-in Animated
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(30)).current;
 
     useEffect(() => {
         const getDeviceId = async () => {
@@ -22,12 +38,23 @@ const LoginScreen = () => {
             setDeviceId(id);
         };
         getDeviceId();
+
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 800,
+                useNativeDriver: true,
+            }),
+            Animated.timing(slideAnim, {
+                toValue: 0,
+                duration: 800,
+                useNativeDriver: true,
+            }),
+        ]).start();
     }, []);
 
-    const [errorMessage, setErrorMessage] = useState('');
-
     const handleLogin = async () => {
-        setErrorMessage(''); // Clear previous errors
+        setErrorMessage('');
         if (!email || !password) {
             setErrorMessage('Please enter email and password');
             return;
@@ -35,154 +62,205 @@ const LoginScreen = () => {
         try {
             await login(email, password, deviceId);
         } catch (error) {
-            setErrorMessage(error.response?.data?.message || 'Login failed. Please check your credentials.');
+            setErrorMessage(error.response?.data?.message || 'Login failed.');
         }
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.heroContainer}>
-                <Image
-                    source={require('../assets/login_hero.jpg')}
-                    style={styles.heroImage}
-                    resizeMode="contain"
-                />
-            </View>
-            <View style={styles.formContainer}>
-                <View style={styles.headerContainer}>
-                    <Text style={styles.welcomeText}>Welcome Back</Text>
-                    <Text style={styles.subText}>Sign in to continue to ClassSync</Text>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+            {/* Background Gradient */}
+            <LinearGradient
+                colors={['#0f0c29', '#302b63', '#24243e']}
+                style={styles.background}
+            />
+
+            {/* Decorative static orbs */}
+            <View style={[styles.orb, styles.orb1]} />
+            <View style={[styles.orb, styles.orb2]} />
+            <View style={[styles.orb, styles.orb3]} />
+
+            {/* Animated card */}
+            <Animated.View
+                style={[
+                    styles.centerContainer,
+                    { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+                ]}
+            >
+                {/* Header */}
+                <View style={styles.header}>
+                    <Text variant="displaySmall" style={styles.title}>ClassSync</Text>
+                    <Text variant="titleSmall" style={styles.subtitle}>Future of Attendance</Text>
                 </View>
 
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Email</Text>
+                {/* Frosted card  — no native blur, uses rgba + border */}
+                <View style={styles.glassContainer}>
+                    <Text variant="headlineSmall" style={styles.welcomeText}>Welcome Back</Text>
+
                     <TextInput
-                        style={styles.input}
-                        placeholder="student@example.com"
+                        label="Email"
                         value={email}
                         onChangeText={setEmail}
+                        mode="outlined"
                         autoCapitalize="none"
                         keyboardType="email-address"
-                        placeholderTextColor="#A0A0A0"
-                    />
-                </View>
-
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Password</Text>
-                    <TextInput
+                        textColor="#FFFFFF"
+                        activeOutlineColor="#7c6af7"
+                        outlineColor="rgba(255,255,255,0.2)"
                         style={styles.input}
-                        placeholder="Enter your password"
+                        theme={{ colors: { onSurfaceVariant: 'rgba(255,255,255,0.6)', background: '#1a1535' } }}
+                        left={<TextInput.Icon icon="email" color="rgba(255,255,255,0.6)" />}
+                    />
+
+                    <TextInput
+                        label="Password"
                         value={password}
                         onChangeText={setPassword}
-                        secureTextEntry
-                        placeholderTextColor="#A0A0A0"
+                        mode="outlined"
+                        secureTextEntry={secureTextEntry}
+                        textColor="#FFFFFF"
+                        activeOutlineColor="#7c6af7"
+                        outlineColor="rgba(255,255,255,0.2)"
+                        style={styles.input}
+                        theme={{ colors: { onSurfaceVariant: 'rgba(255,255,255,0.6)', background: '#1a1535' } }}
+                        right={
+                            <TextInput.Icon
+                                icon={secureTextEntry ? 'eye' : 'eye-off'}
+                                color="rgba(255,255,255,0.6)"
+                                onPress={() => setSecureTextEntry(!secureTextEntry)}
+                            />
+                        }
+                        left={<TextInput.Icon icon="lock" color="rgba(255,255,255,0.6)" />}
                     />
+
+                    {errorMessage ? (
+                        <HelperText type="error" visible style={styles.errorText}>
+                            {errorMessage}
+                        </HelperText>
+                    ) : null}
+
+                    <Button
+                        mode="contained"
+                        onPress={handleLogin}
+                        style={styles.button}
+                        contentStyle={styles.buttonContent}
+                        labelStyle={styles.buttonLabel}
+                        loading={isLoading}
+                        disabled={isLoading}
+                    >
+                        Log In
+                    </Button>
                 </View>
 
-
-
-                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-                <TouchableOpacity style={styles.button} onPress={handleLogin} activeOpacity={0.8}>
-                    <Text style={styles.buttonText}>Log In</Text>
-                </TouchableOpacity>
-
-                <LoadingScreen visible={isLoading} message="Logging In..." />
-
                 <Text style={styles.footer}>Device ID: {deviceId}</Text>
-            </View>
-        </View >
+            </Animated.View>
+
+            <LoadingScreen visible={isLoading} message="Authenticating..." />
+        </KeyboardAvoidingView>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#0f0c29',
     },
-    heroContainer: {
-        flex: 0.4,
+    background: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    centerContainer: {
+        flex: 1,
         justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#F5F9FF',
-        borderBottomLeftRadius: 30,
-        borderBottomRightRadius: 30,
-        marginBottom: 20,
-        overflow: 'hidden',
-    },
-    heroImage: {
-        width: '90%',
-        height: '90%',
-    },
-    formContainer: {
-        flex: 0.6,
         paddingHorizontal: 24,
-        paddingTop: 10,
     },
-    headerContainer: {
-        marginBottom: 30,
+    header: {
+        alignItems: 'center',
+        marginBottom: 36,
+    },
+    title: {
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        letterSpacing: 2,
+    },
+    subtitle: {
+        color: 'rgba(255,255,255,0.6)',
+        marginTop: 6,
+        letterSpacing: 1,
+    },
+    // Frosted glass card using rgba — no native blur needed
+    glassContainer: {
+        borderRadius: 24,
+        padding: 28,
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
     },
     welcomeText: {
-        fontSize: 28,
+        color: '#FFFFFF',
         fontWeight: 'bold',
-        color: '#1A1A1A',
-        marginBottom: 8,
-    },
-    subText: {
-        fontSize: 16,
-        color: '#666666',
-    },
-    inputContainer: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        color: '#333333',
-        marginBottom: 8,
-        fontWeight: '600',
+        marginBottom: 22,
+        textAlign: 'center',
     },
     input: {
-        borderWidth: 1,
-        borderColor: '#E1E1E1',
-        backgroundColor: '#F8F9FA',
-        padding: 16,
-        borderRadius: 12,
-        fontSize: 16,
-        color: '#333333',
-    },
-    errorText: {
-        color: '#FF3B30',
-        fontSize: 14,
-        marginBottom: 10,
-        textAlign: 'center',
-        fontWeight: '500',
+        marginBottom: 14,
+        backgroundColor: 'transparent',
     },
     button: {
-        backgroundColor: '#4A90E2',
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 10,
-        shadowColor: '#4A90E2',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        marginTop: 12,
+        borderRadius: 14,
+        backgroundColor: '#7c6af7',
     },
-    buttonText: {
-        color: '#FFFFFF',
-        fontSize: 18,
+    buttonContent: {
+        paddingVertical: 8,
+    },
+    buttonLabel: {
+        fontSize: 16,
         fontWeight: 'bold',
+        color: '#FFFFFF',
     },
-    loader: {
-        marginTop: 20,
+    errorText: {
+        textAlign: 'center',
+        marginBottom: 6,
+        color: '#FF8A80',
     },
     footer: {
-        marginTop: 30,
         textAlign: 'center',
-        color: '#AAAAAA',
-        fontSize: 12,
-    }
+        color: 'rgba(255,255,255,0.3)',
+        marginTop: 28,
+        fontSize: 11,
+    },
+    // Static decorative orbs — no animation library needed
+    orb: {
+        position: 'absolute',
+        borderRadius: 999,
+    },
+    orb1: {
+        width: 220,
+        height: 220,
+        backgroundColor: 'rgba(124,106,247,0.25)',
+        top: -60,
+        left: -60,
+    },
+    orb2: {
+        width: 180,
+        height: 180,
+        backgroundColor: 'rgba(38,208,206,0.18)',
+        bottom: height * 0.08,
+        right: -50,
+    },
+    orb3: {
+        width: 120,
+        height: 120,
+        backgroundColor: 'rgba(170,75,107,0.2)',
+        top: height * 0.4,
+        left: width * 0.6,
+    },
 });
 
 export default LoginScreen;

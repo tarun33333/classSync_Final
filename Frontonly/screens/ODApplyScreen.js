@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert, Platform, TouchableOpacity, ScrollView, Switch, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import client from '../api/client';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 const ODApplyScreen = ({ navigation }) => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const [fromDate, setFromDate] = useState(new Date());
     const [toDate, setToDate] = useState(new Date());
     const [reason, setReason] = useState('');
@@ -142,7 +147,8 @@ const ODApplyScreen = ({ navigation }) => {
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
 
             {/* Header */}
             <View style={styles.header}>
@@ -269,139 +275,127 @@ const ODApplyScreen = ({ navigation }) => {
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8f9fa' },
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: COLORS.bg },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingVertical: 15,
-        backgroundColor: '#fff',
+        paddingVertical: 14,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        elevation: 2
+        borderBottomColor: COLORS.border,
     },
     backBtn: { padding: 5 },
-    headerTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+    headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary },
     scrollContent: { padding: 20 },
-    sectionHeader: { fontSize: 18, fontWeight: '700', color: '#333', marginBottom: 15, marginTop: 5 },
+    sectionHeader: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 14, marginTop: 5 },
 
     // Stats
-    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 25 },
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
     statCard: {
         width: '48%',
-        backgroundColor: '#fff',
-        padding: 15,
-        borderRadius: 16,
-        marginBottom: 15,
+        backgroundColor: COLORS.bgCard,
+        padding: 14,
+        borderRadius: 14,
+        marginBottom: 12,
         flexDirection: 'row',
         alignItems: 'center',
         borderLeftWidth: 4,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
+        borderWidth: 1,
+        borderColor: COLORS.border,
     },
     iconBox: { padding: 8, borderRadius: 10, marginRight: 10 },
-    statCount: { fontSize: 20, fontWeight: '800', color: '#333' },
-    statLabel: { fontSize: 12, color: '#666', fontWeight: '500' },
+    statCount: { fontSize: 20, fontWeight: '800', color: COLORS.textPrimary },
+    statLabel: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500' },
 
     // Form
     formCard: {
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 20,
-        marginBottom: 25,
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
+        backgroundColor: COLORS.bgCard,
+        borderRadius: 18,
+        padding: 18,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: COLORS.border,
     },
-    toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+    toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border },
     toggleLabelContainer: { flexDirection: 'row', alignItems: 'center' },
-    formLabel: { fontSize: 16, fontWeight: '600', color: '#333', marginLeft: 10 },
-    dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
+    formLabel: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary, marginLeft: 10 },
+    dateRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
     dateField: { flex: 0.48 },
-    inputLabel: { fontSize: 14, fontWeight: '600', color: '#555', marginBottom: 8 },
+    inputLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
     dateInput: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: COLORS.border,
         borderRadius: 12,
         padding: 12,
     },
-    dateInputValue: { fontSize: 14, fontWeight: '600', color: '#333' },
-    periodSection: { marginBottom: 15 },
+    dateInputValue: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
+    periodSection: { marginBottom: 14 },
     periodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     periodBtn: {
         width: 40, height: 40,
         borderRadius: 10,
-        backgroundColor: '#f0f0f0',
+        backgroundColor: 'rgba(255,255,255,0.07)',
         justifyContent: 'center',
         alignItems: 'center',
+        borderWidth: 1, borderColor: COLORS.border,
     },
-    periodBtnActive: { backgroundColor: '#4834d4' },
-    periodText: { fontWeight: '700', color: '#666' },
+    periodBtnActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+    periodText: { fontWeight: '700', color: COLORS.textSecondary },
     periodTextActive: { color: '#fff' },
     textInput: {
-        backgroundColor: '#f8f9fa',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: COLORS.border,
         borderRadius: 12,
-        padding: 15,
+        padding: 14,
         textAlignVertical: 'top',
         fontSize: 15,
-        color: '#333',
-        marginBottom: 20
+        color: COLORS.textPrimary,
+        marginBottom: 18,
     },
     submitBtn: {
-        backgroundColor: '#4834d4',
+        backgroundColor: COLORS.accent,
         paddingVertical: 16,
-        borderRadius: 16,
+        borderRadius: 14,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: '#4834d4',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 5
     },
-    disabledBtn: { backgroundColor: '#a0a0a0', shadowOpacity: 0 },
-    submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', marginRight: 8 },
+    disabledBtn: { backgroundColor: COLORS.textMuted },
+    submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '700', marginRight: 8 },
 
     // History
     historyList: {},
     historyCard: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 12,
+        backgroundColor: COLORS.bgCard,
+        borderRadius: 14,
+        padding: 14,
+        marginBottom: 10,
         borderWidth: 1,
-        borderColor: '#f0f0f0'
+        borderColor: COLORS.border,
     },
-    historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-    bgGreen: { backgroundColor: '#d1fae5' },
-    bgRed: { backgroundColor: '#ffe0e3' },
-    bgYellow: { backgroundColor: '#fff3cd' },
-    textGreen: { color: '#059669', fontSize: 11, fontWeight: '800' },
-    textRed: { color: '#e11d48', fontSize: 11, fontWeight: '800' },
-    textYellow: { color: '#d97706', fontSize: 11, fontWeight: '800' },
+    bgGreen: { backgroundColor: COLORS.successBg },
+    bgRed: { backgroundColor: COLORS.dangerBg },
+    bgYellow: { backgroundColor: COLORS.warningBg },
+    textGreen: { color: COLORS.success, fontSize: 11, fontWeight: '800' },
+    textRed: { color: COLORS.danger, fontSize: 11, fontWeight: '800' },
+    textYellow: { color: COLORS.warning, fontSize: 11, fontWeight: '800' },
     statusText: {},
-    dateText: { fontSize: 12, color: '#888' },
+    dateText: { fontSize: 12, color: COLORS.textSecondary },
     historyContent: {},
     row: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-    historyDateRange: { fontSize: 14, fontWeight: '600', color: '#333' },
-    historyReason: { fontSize: 13, color: '#666', lineHeight: 18 },
+    historyDateRange: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
+    historyReason: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18 },
     emptyState: { alignItems: 'center', padding: 40 },
-    emptyText: { color: '#aaa', marginTop: 10, fontWeight: '500' }
+    emptyText: { color: COLORS.textMuted, marginTop: 10, fontWeight: '500' },
 });
 
 export default ODApplyScreen;

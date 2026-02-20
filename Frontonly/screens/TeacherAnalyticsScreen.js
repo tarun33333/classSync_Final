@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, ActivityIndicator, Platform, FlatList, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, ActivityIndicator, Platform, FlatList, Dimensions, StatusBar } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import client from '../api/client';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,11 +8,15 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import { PieChart } from 'react-native-chart-kit';
+import { useTheme } from '../context/ThemeContext';
 
 const { StorageAccessFramework } = FileSystem;
 const screenWidth = Dimensions.get('window').width;
 
 const TeacherAnalyticsScreen = () => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     // Master Data
     const [teacherClasses, setTeacherClasses] = useState([]);
 
@@ -249,127 +254,131 @@ const TeacherAnalyticsScreen = () => {
     };
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.controls}>
-                <Text style={styles.headerTitle}>Analytics Filters</Text>
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+            <ScrollView style={styles.container}>
+                <View style={styles.controls}>
+                    <Text style={styles.headerTitle}>Analytics Filters</Text>
 
-                {/* Dept Selector */}
-                <Text style={styles.label}>Department</Text>
-                <TouchableOpacity style={styles.selector} onPress={() => openModal('dept')}>
-                    <Text style={styles.selectorText}>{selectedDept || 'Select Department'}</Text>
-                    <Ionicons name="chevron-down" size={20} color="#666" />
-                </TouchableOpacity>
+                    {/* Dept Selector */}
+                    <Text style={styles.label}>Department</Text>
+                    <TouchableOpacity style={styles.selector} onPress={() => openModal('dept')}>
+                        <Text style={styles.selectorText}>{selectedDept || 'Select Department'}</Text>
+                        <Ionicons name="chevron-down" size={20} color="#666" />
+                    </TouchableOpacity>
 
-                {/* Batch Selector */}
-                <Text style={styles.label}>Batch</Text>
-                <TouchableOpacity style={[styles.selector, !selectedDept && styles.disabled]} onPress={() => selectedDept && openModal('batch')} disabled={!selectedDept}>
-                    <Text style={styles.selectorText}>{selectedBatch || 'Select Batch'}</Text>
-                    <Ionicons name="chevron-down" size={20} color="#666" />
-                </TouchableOpacity>
+                    {/* Batch Selector */}
+                    <Text style={styles.label}>Batch</Text>
+                    <TouchableOpacity style={[styles.selector, !selectedDept && styles.disabled]} onPress={() => selectedDept && openModal('batch')} disabled={!selectedDept}>
+                        <Text style={styles.selectorText}>{selectedBatch || 'Select Batch'}</Text>
+                        <Ionicons name="chevron-down" size={20} color="#666" />
+                    </TouchableOpacity>
 
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    {/* Sem Selector */}
-                    <View style={{ flex: 1, marginRight: 5 }}>
-                        <Text style={styles.label}>Semester</Text>
-                        <TouchableOpacity style={[styles.selector, !selectedBatch && styles.disabled]} onPress={() => selectedBatch && openModal('sem')} disabled={!selectedBatch}>
-                            <Text style={styles.selectorText}>{selectedSemester ? `Sem ${selectedSemester}` : 'Select'}</Text>
-                            <Ionicons name="chevron-down" size={20} color="#666" />
-                        </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        {/* Sem Selector */}
+                        <View style={{ flex: 1, marginRight: 5 }}>
+                            <Text style={styles.label}>Semester</Text>
+                            <TouchableOpacity style={[styles.selector, !selectedBatch && styles.disabled]} onPress={() => selectedBatch && openModal('sem')} disabled={!selectedBatch}>
+                                <Text style={styles.selectorText}>{selectedSemester ? `Sem ${selectedSemester}` : 'Select'}</Text>
+                                <Ionicons name="chevron-down" size={20} color="#666" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Subject Selector */}
+                        <View style={{ flex: 1.5, marginLeft: 5 }}>
+                            <Text style={styles.label}>Subject</Text>
+                            <TouchableOpacity style={[styles.selector, !selectedSemester && styles.disabled]} onPress={() => selectedSemester && openModal('sub')} disabled={!selectedSemester}>
+                                <Text style={styles.selectorText} numberOfLines={1}>{selectedSubject || 'Select Subject'}</Text>
+                                <Ionicons name="chevron-down" size={20} color="#666" />
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
-                    {/* Subject Selector */}
-                    <View style={{ flex: 1.5, marginLeft: 5 }}>
-                        <Text style={styles.label}>Subject</Text>
-                        <TouchableOpacity style={[styles.selector, !selectedSemester && styles.disabled]} onPress={() => selectedSemester && openModal('sub')} disabled={!selectedSemester}>
-                            <Text style={styles.selectorText} numberOfLines={1}>{selectedSubject || 'Select Subject'}</Text>
-                            <Ionicons name="chevron-down" size={20} color="#666" />
-                        </TouchableOpacity>
+                    <Text style={styles.label}>Date Range</Text>
+                    <View style={styles.dateRow}>
+                        <RenderDateBtn date={startDate} setShow={setShowStartPicker} />
+                        <Text style={{ marginHorizontal: 10 }}>to</Text>
+                        <RenderDateBtn date={endDate} setShow={setShowEndPicker} />
                     </View>
-                </View>
 
-                <Text style={styles.label}>Date Range</Text>
-                <View style={styles.dateRow}>
-                    <RenderDateBtn date={startDate} setShow={setShowStartPicker} />
-                    <Text style={{ marginHorizontal: 10 }}>to</Text>
-                    <RenderDateBtn date={endDate} setShow={setShowEndPicker} />
-                </View>
-
-                {showStartPicker && (
-                    <DateTimePicker value={startDate} mode="date" display="default"
-                        onChange={(event, selected) => { setShowStartPicker(Platform.OS === 'ios'); if (selected) setStartDate(selected); }}
-                    />
-                )}
-                {showEndPicker && (
-                    <DateTimePicker value={endDate} mode="date" display="default"
-                        onChange={(event, selected) => { setShowEndPicker(Platform.OS === 'ios'); if (selected) setEndDate(selected); }}
-                    />
-                )}
-
-                <TouchableOpacity style={[styles.generateBtn, (!selectedSubject) && { opacity: 0.7 }]} onPress={generateReport} disabled={loading || !selectedSubject}>
-                    {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Generate Report</Text>}
-                </TouchableOpacity>
-            </View>
-
-            {/* Analytics Dashboard */}
-            {reportData && stats && (
-                <View style={styles.dashboard}>
-                    {reportData.report.length === 0 ? (
-                        <Text style={styles.noDataText}>No attendance records found.</Text>
-                    ) : (
-                        <>
-                            <Text style={styles.sectionTitle}>Overview</Text>
-                            <View style={styles.statsRow}>
-                                <View style={[styles.statCard, { backgroundColor: '#e3f2fd' }]}>
-                                    <Text style={styles.statLabel}>Avg Attendance</Text>
-                                    <Text style={[styles.statValue, { color: '#1976d2' }]}>{stats.avgValidation}%</Text>
-                                </View>
-                                <View style={[styles.statCard, { backgroundColor: '#e8f5e9' }]}>
-                                    <Text style={styles.statLabel}>Total Classes</Text>
-                                    <Text style={[styles.statValue, { color: '#2e7d32' }]}>{reportData.totalClasses}</Text>
-                                </View>
-                            </View>
-
-                            <ScrollView horizontal={true} contentContainerStyle={{ alignItems: 'center', width: '100%' }}>
-                                <PieChart
-                                    data={[
-                                        { name: "Present", population: stats.present, color: "#4caf50", legendFontColor: "#7F7F7F", legendFontSize: 14 },
-                                        { name: "Absent", population: stats.absent, color: "#f44336", legendFontColor: "#7F7F7F", legendFontSize: 14 }
-                                    ]}
-                                    width={screenWidth - 40}
-                                    height={200}
-                                    chartConfig={chartConfig}
-                                    accessor={"population"}
-                                    backgroundColor={"transparent"}
-                                    paddingLeft={"15"}
-                                    absolute
-                                />
-                            </ScrollView>
-
-                            <View style={styles.resultHeader}>
-                                <Text style={styles.sectionTitle}>Student Details</Text>
-                                <TouchableOpacity style={styles.downloadIconBtn} onPress={downloadPdf}>
-                                    <Ionicons name="download-outline" size={24} color="#4834d4" />
-                                    <Text style={styles.downloadText}>PDF</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            {reportData.report.map((item, index) => (
-                                <View key={item.studentId} style={styles.row}>
-                                    <View style={{ flex: 2 }}>
-                                        <Text style={styles.name}>{index + 1}. {item.name}</Text>
-                                        <Text style={styles.roll}>{item.rollNumber}</Text>
-                                    </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={styles.present}>{item.present}/{item.total}</Text>
-                                        <Text style={[styles.percentage, { color: item.percentage < 75 ? 'red' : 'green' }]}>{item.percentage}%</Text>
-                                    </View>
-                                </View>
-                            ))}
-                        </>
+                    {showStartPicker && (
+                        <DateTimePicker value={startDate} mode="date" display="default"
+                            onChange={(event, selected) => { setShowStartPicker(Platform.OS === 'ios'); if (selected) setStartDate(selected); }}
+                        />
                     )}
-                </View>
-            )}
+                    {showEndPicker && (
+                        <DateTimePicker value={endDate} mode="date" display="default"
+                            onChange={(event, selected) => { setShowEndPicker(Platform.OS === 'ios'); if (selected) setEndDate(selected); }}
+                        />
+                    )}
 
+                    <TouchableOpacity style={[styles.generateBtn, (!selectedSubject) && { opacity: 0.7 }]} onPress={generateReport} disabled={loading || !selectedSubject}>
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Generate Report</Text>}
+                    </TouchableOpacity>
+                </View>
+
+                {/* Analytics Dashboard */}
+                {reportData && stats && (
+                    <View style={styles.dashboard}>
+                        {reportData.report.length === 0 ? (
+                            <Text style={styles.noDataText}>No attendance records found.</Text>
+                        ) : (
+                            <>
+                                <Text style={styles.sectionTitle}>Overview</Text>
+                                <View style={styles.statsRow}>
+                                    <View style={[styles.statCard, { backgroundColor: '#e3f2fd' }]}>
+                                        <Text style={styles.statLabel}>Avg Attendance</Text>
+                                        <Text style={[styles.statValue, { color: '#1976d2' }]}>{stats.avgValidation}%</Text>
+                                    </View>
+                                    <View style={[styles.statCard, { backgroundColor: '#e8f5e9' }]}>
+                                        <Text style={styles.statLabel}>Total Classes</Text>
+                                        <Text style={[styles.statValue, { color: '#2e7d32' }]}>{reportData.totalClasses}</Text>
+                                    </View>
+                                </View>
+
+                                <ScrollView horizontal={true} contentContainerStyle={{ alignItems: 'center', width: '100%' }}>
+                                    <PieChart
+                                        data={[
+                                            { name: "Present", population: stats.present, color: "#4caf50", legendFontColor: "#7F7F7F", legendFontSize: 14 },
+                                            { name: "Absent", population: stats.absent, color: "#f44336", legendFontColor: "#7F7F7F", legendFontSize: 14 }
+                                        ]}
+                                        width={screenWidth - 40}
+                                        height={200}
+                                        chartConfig={chartConfig}
+                                        accessor={"population"}
+                                        backgroundColor={"transparent"}
+                                        paddingLeft={"15"}
+                                        absolute
+                                    />
+                                </ScrollView>
+
+                                <View style={styles.resultHeader}>
+                                    <Text style={styles.sectionTitle}>Student Details</Text>
+                                    <TouchableOpacity style={styles.downloadIconBtn} onPress={downloadPdf}>
+                                        <Ionicons name="download-outline" size={24} color="#4834d4" />
+                                        <Text style={styles.downloadText}>PDF</Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {reportData.report.map((item, index) => (
+                                    <View key={item.studentId} style={styles.row}>
+                                        <View style={{ flex: 2 }}>
+                                            <Text style={styles.name}>{index + 1}. {item.name}</Text>
+                                            <Text style={styles.roll}>{item.rollNumber}</Text>
+                                        </View>
+                                        <View style={{ alignItems: 'flex-end' }}>
+                                            <Text style={styles.present}>{item.present}/{item.total}</Text>
+                                            <Text style={[styles.percentage, { color: item.percentage < 75 ? 'red' : 'green' }]}>{item.percentage}%</Text>
+                                        </View>
+                                    </View>
+                                ))}
+                            </>
+                        )}
+                    </View>
+                )}
+
+            </ScrollView>
             <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
@@ -389,52 +398,53 @@ const TeacherAnalyticsScreen = () => {
                     </View>
                 </View>
             </Modal>
-        </ScrollView>
+        </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8f9fa', padding: 15 },
-    controls: { backgroundColor: '#fff', padding: 15, borderRadius: 12, elevation: 2, marginBottom: 15 },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 15 },
-    label: { fontSize: 13, color: '#666', marginBottom: 5, fontWeight: '600' },
-    selector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 12, borderRadius: 8, marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
-    disabled: { opacity: 0.5, backgroundColor: '#eee' },
-    selectorText: { fontSize: 15, color: '#333' },
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1, padding: 15 },
+    controls: { backgroundColor: COLORS.bgCard, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 15 },
+    headerTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 14 },
+    label: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 6, fontWeight: '600', textTransform: 'uppercase' },
+    selector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
+    disabled: { opacity: 0.4 },
+    selectorText: { fontSize: 14, color: COLORS.textPrimary },
 
-    dateRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-    dateBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f5f5f5', padding: 10, borderRadius: 8, justifyContent: 'center', borderWidth: 1, borderColor: '#eee' },
-    dateText: { marginLeft: 5, fontWeight: '600', color: '#444' },
+    dateRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+    dateBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 10, justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
+    dateText: { marginLeft: 6, fontWeight: '600', color: COLORS.textPrimary },
 
-    generateBtn: { backgroundColor: '#4834d4', padding: 15, borderRadius: 10, alignItems: 'center', marginTop: 10 },
-    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+    generateBtn: { backgroundColor: COLORS.accent, padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 8 },
+    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 
-    dashboard: { backgroundColor: '#fff', borderRadius: 12, padding: 15, elevation: 2, marginBottom: 30 },
-    noDataText: { textAlign: 'center', marginVertical: 20, color: '#888', fontStyle: 'italic' },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: '#333' },
+    dashboard: { backgroundColor: COLORS.bgCard, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 30 },
+    noDataText: { textAlign: 'center', marginVertical: 20, color: COLORS.textMuted, fontStyle: 'italic' },
+    sectionTitle: { fontSize: 17, fontWeight: 'bold', marginBottom: 14, color: COLORS.textPrimary },
 
-    statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-    statCard: { flex: 1, padding: 15, borderRadius: 10, marginHorizontal: 5, alignItems: 'center' },
-    statLabel: { fontSize: 12, color: '#666', marginBottom: 5 },
-    statValue: { fontSize: 20, fontWeight: 'bold' },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 18 },
+    statCard: { flex: 1, padding: 14, borderRadius: 12, marginHorizontal: 4, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
+    statLabel: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 },
+    statValue: { fontSize: 20, fontWeight: 'bold', color: COLORS.textPrimary },
 
-    resultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, marginTop: 10, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 },
-    downloadIconBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e3f2fd', padding: 5, borderRadius: 5, paddingHorizontal: 10 },
-    downloadText: { marginLeft: 5, color: '#4834d4', fontWeight: 'bold', fontSize: 12 },
+    resultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, marginTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 14 },
+    downloadIconBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.accentLight, padding: 6, borderRadius: 8, paddingHorizontal: 12, borderWidth: 1, borderColor: COLORS.borderAccent },
+    downloadText: { marginLeft: 5, color: COLORS.accent, fontWeight: 'bold', fontSize: 12 },
 
-    row: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f9f9f9', alignItems: 'center', justifyContent: 'space-between' },
-    name: { fontWeight: '600', fontSize: 15, color: '#333' },
-    roll: { fontSize: 12, color: '#666' },
-    present: { fontSize: 14, color: '#444', textAlign: 'right' },
-    percentage: { fontWeight: 'bold', fontSize: 15, textAlign: 'right' },
+    row: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border, alignItems: 'center', justifyContent: 'space-between' },
+    name: { fontWeight: '600', fontSize: 14, color: COLORS.textPrimary },
+    roll: { fontSize: 12, color: COLORS.textSecondary },
+    present: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'right' },
+    percentage: { fontWeight: 'bold', fontSize: 14, textAlign: 'right' },
 
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: 'white', borderRadius: 15, padding: 20, maxHeight: 400 },
-    modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
-    modalItem: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#eee', alignItems: 'center' },
-    modalItemText: { fontSize: 16, color: '#333' },
-    closeBtn: { marginTop: 15, padding: 12, alignItems: 'center', backgroundColor: '#f0f0f0', borderRadius: 8 },
-    closeBtnText: { fontWeight: 'bold', color: '#666' }
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 24 },
+    modalContent: { backgroundColor: COLORS.bgMid, borderRadius: 18, padding: 20, maxHeight: 400, borderWidth: 1, borderColor: COLORS.border },
+    modalTitle: { fontSize: 17, fontWeight: 'bold', marginBottom: 14, textAlign: 'center', color: COLORS.textPrimary },
+    modalItem: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, alignItems: 'center' },
+    modalItemText: { fontSize: 15, color: COLORS.textPrimary },
+    closeBtn: { marginTop: 14, padding: 12, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
+    closeBtnText: { fontWeight: 'bold', color: COLORS.textSecondary },
 });
 
 export default TeacherAnalyticsScreen;

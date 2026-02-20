@@ -85,6 +85,8 @@ const login = async (req, res) => {
                 advisorBatch: user.advisorBatch,
                 advisorDept: user.advisorDept,
                 advisorName: advisorName,
+                profilePhoto: user.profilePhoto || null,
+                theme: user.theme || 'dark',
                 token: generateToken(user._id),
             });
         } else {
@@ -123,11 +125,46 @@ const verify = async (req, res) => {
             isAdvisor: user.isAdvisor,
             advisorBatch: user.advisorBatch,
             advisorDept: user.advisorDept,
-            advisorName: advisorName
+            advisorName: advisorName,
+            profilePhoto: user.profilePhoto || null,
+            theme: user.theme || 'dark',
         });
     } else {
         res.status(404).json({ message: 'User not found' });
     }
 };
 
-module.exports = { register, login, verify };
+// @desc    Update profile photo
+// @route   PUT /api/auth/profile-photo
+// @access  Private
+const updateProfilePhoto = async (req, res) => {
+    try {
+        const { photoBase64 } = req.body;
+        if (!photoBase64) return res.status(400).json({ message: 'No photo provided' });
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { profilePhoto: photoBase64 },
+            { new: true }
+        );
+        res.json({ profilePhoto: user.profilePhoto });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Update theme preference
+// @route   PUT /api/auth/theme
+// @access  Private
+const updateTheme = async (req, res) => {
+    try {
+        const { theme } = req.body;
+        if (!['dark', 'light'].includes(theme))
+            return res.status(400).json({ message: 'Invalid theme' });
+        await User.findByIdAndUpdate(req.user._id, { theme });
+        res.json({ theme });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+module.exports = { register, login, verify, updateProfilePhoto, updateTheme };

@@ -413,9 +413,15 @@ const getStudentDashboard = async (req, res) => {
         ]);
 
         // 3. Fetch ANY active sessions for this student's section (Real-time check)
+        // IMPORTANT: Only fetch sessions created TODAY — expired/forgot-to-end sessions from
+        // previous days are ignored here. They are auto-expired by getActiveSession on the teacher side.
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
         const activeSessions = await Session.find({
             section: req.user.section,
-            isActive: true
+            isActive: true,
+            createdAt: { $gte: startOfToday }  // Only today's sessions
         }).populate('teacher', 'name');
 
         // Helper to parse '09:30 AM' to Date object for Today

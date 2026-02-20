@@ -1,56 +1,45 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { View, Text, Button, StyleSheet, Alert, FlatList, TouchableOpacity } from 'react-native';
+import {
+    View, Text, StyleSheet, Alert, FlatList,
+    TouchableOpacity, StatusBar,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import * as Network from 'expo-network';
 import { formatTime } from '../utils/timeUtils';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 const TeacherHomeScreen = ({ navigation }) => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const { userInfo } = useContext(AuthContext);
     const [routines, setRoutines] = useState([]);
-    const [activeSession, setActiveSession] = useState(null);
+    const [now, setNow] = useState(new Date());
 
     useEffect(() => {
         fetchRoutines();
-        // checkActiveSession(); // TEMPORARILY DISABLED: To break loop due to stuck session (Backend 'od' error)
+        const timer = setInterval(() => setNow(new Date()), 10000);
+        return () => clearInterval(timer);
     }, []);
 
     const fetchRoutines = async () => {
         try {
             const res = await client.get('/routines/teacher');
             setRoutines(res.data);
-        } catch (error) {
-            // console.log('Error fetching routines');
-        }
-    };
-
-    const checkActiveSession = async () => {
-        try {
-            const res = await client.get('/sessions/active');
-            if (res.data) {
-                setActiveSession(res.data);
-                navigation.navigate('TeacherSession', { session: res.data });
-            }
-        } catch (error) {
-            // console.log('No active session');
-        }
+        } catch (error) { }
     };
 
     const startSession = async (routine) => {
         try {
-            // console.log('Attempting to start session with routine:', routine);
             const { isConnected } = await Network.getNetworkStateAsync();
-            if (!isConnected) {
-                Alert.alert('Error', 'No internet connection');
-                return;
-            }
-
+            if (!isConnected) { Alert.alert('Error', 'No internet connection'); return; }
             const ipAddress = await Network.getIpAddressAsync();
-            // console.log('IP Address:', ipAddress);
-
             const sessionData = {
                 subject: routine.subject,
-                section: routine.section || 'A', // Default to 'A' if undefined (Fixes ClassHistory validation & Student filtering)
+                section: routine.section || 'A',
                 batch: routine.batch,
                 dept: routine.dept,
                 semester: routine.semester,
@@ -59,131 +48,137 @@ const TeacherHomeScreen = ({ navigation }) => {
                 startTime: routine.startTime,
                 endTime: routine.endTime,
                 bssid: ipAddress || 'UNKNOWN',
-                ssid: 'ClassWiFi'
+                ssid: 'ClassWiFi',
             };
-
-            // console.log('Sending sessionData:', sessionData);
-
             const res = await client.post('/sessions/start', sessionData);
-            // console.log('Session started successfully:', res.data);
             navigation.navigate('TeacherSession', { session: res.data });
         } catch (error) {
-            console.error('Start Session Error:', error);
-            if (error.response) {
-                console.log('Error Response Data:', error.response.data);
-                console.log('Error Response Status:', error.response.status);
-                console.log('Error Response Headers:', error.response.headers);
-            }
-            const errorMessage = error.response?.data?.message || error.message || 'Failed to start session';
-            Alert.alert('Error', errorMessage);
+            const msg = error.response?.data?.message || error.message || 'Failed to start session';
+            Alert.alert('Error', msg);
         }
     };
 
-    const [now, setNow] = useState(new Date());
-
-    useEffect(() => {
-        const timer = setInterval(() => setNow(new Date()), 10000); // 10s check
-        return () => clearInterval(timer);
-    }, []);
-
     const isCurrentPeriod = (start, end) => {
-        const currentHour = now.getHours();
-        const currentMin = now.getMinutes();
-        const currentTimeVal = currentHour * 60 + currentMin;
-
-        const [startHour, startMin] = start.split(':').map(Number);
-        const startTimeVal = startHour * 60 + startMin;
-
-        const [endHour, endMin] = end.split(':').map(Number);
-        const endTimeVal = endHour * 60 + endMin;
-
-        return currentTimeVal >= startTimeVal && currentTimeVal < endTimeVal;
+        const cur = now.getHours() * 60 + now.getMinutes();
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        return cur >= sh * 60 + sm && cur < eh * 60 + em;
     };
+
+    const todayRoutines = routines.filter(
+        r => r.day === new Date().toLocaleDateString('en-US', { weekday: 'long' })
+    );
 
     const renderRoutine = ({ item }) => {
         const canStart = isCurrentPeriod(item.startTime, item.endTime);
-
         return (
-            <View style={styles.card}>
-                <View>
-                    <Text style={styles.subject}>{item.subject}</Text>
-                    <Text style={styles.details}>{item.section} | {item.day} | {formatTime(item.startTime)} - {formatTime(item.endTime)}</Text>
+            <View style={[styles.card, canStart && styles.cardActive]}>
+                <View style={styles.cardLeft}>
+                    {canStart && <View style={styles.liveDot} />}
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.subject}>{item.subject}</Text>
+                            {canStart && (
+                                <View style={styles.nowBadge}>
+                                    <Text style={styles.nowBadgeText}>NOW</Text>
+                                </View>
+                            )}
+                        </View>
+                        <Text style={styles.details}>
+                            {item.section} · {item.day} · {formatTime(item.startTime)} – {formatTime(item.endTime)}
+                        </Text>
+                    </View>
                 </View>
-                {canStart && (
-                    <Button title="Start" onPress={() => startSession(item)} />
+                {canStart ? (
+                    <TouchableOpacity style={styles.startBtn} onPress={() => startSession(item)}>
+                        <Ionicons name="play-circle" size={18} color="#fff" />
+                        <Text style={styles.startBtnText}>Start</Text>
+                    </TouchableOpacity>
+                ) : (
+                    <Ionicons name="time-outline" size={20} color={COLORS.textMuted} />
                 )}
             </View>
         );
     };
 
+    const quickActions = [
+        { label: 'Weekly Schedule', icon: 'calendar-outline', screen: 'Timetable', params: { role: 'teacher' }, color: COLORS.accent },
+        { label: 'Notice Board', icon: 'megaphone-outline', screen: 'Announcements', params: { role: 'teacher' }, color: '#aa4b6b' },
+        { label: 'AI Quiz', icon: 'sparkles-outline', screen: 'QuizGen', color: '#f59e0b' },
+        ...(userInfo?.isAdvisor ? [{ label: 'Advisor Dashboard', icon: 'people-outline', screen: 'AdvisorDashboard', color: '#26D0CE' }] : []),
+    ];
+
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Welcome, {userInfo?.name}</Text>
-            <Text style={styles.subtitle}>Your Schedule</Text>
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
 
             <FlatList
-                data={routines.filter(r => r.day === new Date().toLocaleDateString('en-US', { weekday: 'long' }))}
-                keyExtractor={(item, index) => item._id || `${item.subject}-${item.startTime}-${index}`}
+                data={todayRoutines}
+                keyExtractor={(item, i) => item._id || `${item.subject}-${i}`}
                 renderItem={renderRoutine}
-                ListEmptyComponent={<Text style={styles.noData}>No classes assigned for today.</Text>}
+                ListHeaderComponent={() => (
+                    <View style={styles.header}>
+                        {/* Greeting */}
+                        <Text style={styles.greeting}>Welcome,</Text>
+                        <Text style={styles.name}>{userInfo?.name}</Text>
+                        <Text style={styles.subtitle}>Your Schedule</Text>
+
+                        {/* Quick Actions */}
+                        <View style={styles.quickGrid}>
+                            {quickActions.map(item => (
+                                <TouchableOpacity
+                                    key={item.screen}
+                                    style={styles.quickCard}
+                                    onPress={() => navigation.navigate(item.screen, item.params)}
+                                >
+                                    <View style={[styles.quickIcon, { backgroundColor: item.color + '33' }]}>
+                                        <Ionicons name={item.icon} size={22} color={item.color} />
+                                    </View>
+                                    <Text style={styles.quickLabel}>{item.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={styles.sectionTitle}>Today's Classes</Text>
+                    </View>
+                )}
+                ListEmptyComponent={
+                    <View style={styles.emptyBox}>
+                        <Ionicons name="cafe-outline" size={36} color={COLORS.textMuted} />
+                        <Text style={styles.noData}>No classes today.</Text>
+                    </View>
+                }
+                contentContainerStyle={styles.list}
             />
-
-            <TouchableOpacity
-                style={styles.fullScheduleBtn}
-                onPress={() => navigation.navigate('Timetable', { role: 'teacher' })}
-            >
-                <Text style={styles.fullScheduleText}>View Full Weekly Schedule</Text>
-            </TouchableOpacity>
-
-            {userInfo?.isAdvisor && (
-                <TouchableOpacity
-                    style={[styles.fullScheduleBtn, { backgroundColor: '#d1fae5', marginTop: 0 }]}
-                    onPress={() => navigation.navigate('AdvisorDashboard')}
-                >
-                    <Text style={[styles.fullScheduleText, { color: '#065f46' }]}>Advisor Dashboard (OD Requests)</Text>
-                </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-                style={[styles.fullScheduleBtn, { backgroundColor: '#E0F7FA', marginTop: 10 }]}
-                onPress={() => navigation.navigate('Announcements', { role: 'teacher' })}
-            >
-                <Text style={[styles.fullScheduleText, { color: '#006064' }]}>📢 Notice Board</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.fullScheduleBtn, { backgroundColor: '#FFF3E0', marginTop: 10 }]}
-                onPress={() => navigation.navigate('QuizGen')}
-            >
-                <Text style={[styles.fullScheduleText, { color: '#E65100' }]}>✨ AI Quiz Generator</Text>
-            </TouchableOpacity>
-
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20 },
-    title: { fontSize: 24, fontWeight: 'bold', marginBottom: 10 },
-    subtitle: { fontSize: 18, marginBottom: 20, color: '#666' },
-    card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, backgroundColor: '#fff', marginBottom: 10, borderRadius: 8, elevation: 2 },
-    subject: { fontSize: 18, fontWeight: 'bold' },
-    details: { color: '#555' },
-    noData: { textAlign: 'center', marginTop: 20, color: '#888' },
-    logout: { marginTop: 20 },
-    fullScheduleBtn: {
-        backgroundColor: '#eef2f5',
-        padding: 15,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 10,
-        marginBottom: 20
-    },
-    fullScheduleText: {
-        color: '#4834d4',
-        fontWeight: 'bold',
-        fontSize: 16
-    }
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    list: { padding: 20, paddingBottom: 40 },
+    header: { marginBottom: 4 },
+    greeting: { fontSize: 15, color: COLORS.textSecondary, marginTop: 10 },
+    name: { fontSize: 26, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 4 },
+    subtitle: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 20 },
+    quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 28 },
+    quickCard: { width: '47%', backgroundColor: COLORS.bgCard, borderRadius: 14, padding: 16, alignItems: 'flex-start', borderWidth: 1, borderColor: COLORS.border },
+    quickIcon: { width: 42, height: 42, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    quickLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textPrimary },
+    sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 14 },
+    card: { backgroundColor: COLORS.bgCard, borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    cardActive: { borderColor: COLORS.borderAccent, borderLeftWidth: 4, borderLeftColor: COLORS.accent, backgroundColor: COLORS.accentLight },
+    cardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+    liveDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: COLORS.danger, marginTop: 2 },
+    nowBadge: { backgroundColor: COLORS.danger, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+    nowBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+    subject: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 3 },
+    details: { fontSize: 13, color: COLORS.textSecondary },
+    startBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.accent, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+    startBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+    emptyBox: { alignItems: 'center', paddingVertical: 30 },
+    noData: { color: COLORS.textMuted, marginTop: 10, fontSize: 14 },
 });
 
 export default TeacherHomeScreen;

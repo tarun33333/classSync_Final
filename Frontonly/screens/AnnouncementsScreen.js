@@ -1,15 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import {
+    View, Text, FlatList, StyleSheet, ActivityIndicator,
+    TouchableOpacity, RefreshControl, Alert, StatusBar,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import client from '../api/client';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme } from '../context/ThemeContext';
 
 const AnnouncementsScreen = ({ route }) => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-
-    // Determine user role to show "Create" button for teachers
     const { role } = route.params || { role: 'student' };
     const navigation = useNavigation();
 
@@ -25,52 +31,46 @@ const AnnouncementsScreen = ({ route }) => {
         }
     };
 
-    useEffect(() => {
-        fetchAnnouncements();
-    }, []);
-
-    const onRefresh = () => {
-        setRefreshing(true);
-        fetchAnnouncements();
-    };
+    useEffect(() => { fetchAnnouncements(); }, []);
+    const onRefresh = () => { setRefreshing(true); fetchAnnouncements(); };
 
     const handleDelete = (id) => {
-        Alert.alert(
-            'Delete Announcement',
-            'Are you sure you want to delete this announcement?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await client.delete(`/announcements/${id}`);
-                            setAnnouncements(prev => prev.filter(a => a._id !== id));
-                        } catch (error) {
-                            Alert.alert('Error', 'Failed to delete announcement');
-                        }
+        Alert.alert('Delete Announcement', 'Are you sure?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete', style: 'destructive',
+                onPress: async () => {
+                    try {
+                        await client.delete(`/announcements/${id}`);
+                        setAnnouncements(prev => prev.filter(a => a._id !== id));
+                    } catch {
+                        Alert.alert('Error', 'Failed to delete announcement');
                     }
                 }
-            ]
-        );
+            }
+        ]);
     };
 
     const renderItem = ({ item }) => (
         <View style={styles.card}>
-            <View style={styles.header}>
-                <Ionicons name="megaphone-outline" size={24} color="#4834d4" />
-                <View style={[styles.headerText, { flex: 1 }]}>
+            <View style={styles.cardHeader}>
+                <View style={styles.iconBadge}>
+                    <Ionicons name="megaphone" size={18} color={COLORS.accent} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.title}>{item.title}</Text>
-                    <Text style={styles.author}>{item.authorName} • {new Date(item.date).toLocaleDateString()}</Text>
+                    <Text style={styles.meta}>{item.authorName} · {new Date(item.date).toLocaleDateString()}</Text>
                 </View>
                 {role === 'teacher' && (
                     <View style={styles.actions}>
-                        <TouchableOpacity onPress={() => navigation.navigate('CreateAnnouncement', { announcement: item })}>
-                            <Ionicons name="create-outline" size={24} color="#666" style={{ marginRight: 15 }} />
+                        <TouchableOpacity
+                            onPress={() => navigation.navigate('CreateAnnouncement', { announcement: item })}
+                            style={styles.iconBtn}
+                        >
+                            <Ionicons name="create-outline" size={20} color={COLORS.textSecondary} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDelete(item._id)}>
-                            <Ionicons name="trash-outline" size={24} color="#ff4757" />
+                        <TouchableOpacity onPress={() => handleDelete(item._id)} style={styles.iconBtn}>
+                            <Ionicons name="trash-outline" size={20} color={COLORS.danger} />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -80,17 +80,35 @@ const AnnouncementsScreen = ({ route }) => {
     );
 
     return (
-        <View style={styles.container}>
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+
             {loading ? (
-                <ActivityIndicator size="large" color="#4834d4" style={{ marginTop: 20 }} />
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={COLORS.accent} />
+                </View>
             ) : (
                 <FlatList
                     data={announcements}
-                    keyExtractor={(item) => item._id}
+                    keyExtractor={item => item._id}
                     renderItem={renderItem}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                    ListEmptyComponent={<Text style={styles.noData}>No announcements yet.</Text>}
-                    contentContainerStyle={{ paddingBottom: 80 }}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={COLORS.accent}
+                            colors={[COLORS.accent]}
+                        />
+                    }
+                    ListHeaderComponent={<Text style={styles.pageTitle}>📢 Notice Board</Text>}
+                    ListEmptyComponent={
+                        <View style={styles.center}>
+                            <Ionicons name="megaphone-outline" size={40} color={COLORS.textMuted} />
+                            <Text style={styles.noData}>No announcements yet.</Text>
+                        </View>
+                    }
+                    contentContainerStyle={styles.list}
                 />
             )}
 
@@ -99,45 +117,28 @@ const AnnouncementsScreen = ({ route }) => {
                     style={styles.fab}
                     onPress={() => navigation.navigate('CreateAnnouncement')}
                 >
-                    <Ionicons name="add" size={30} color="#fff" />
+                    <Ionicons name="add" size={28} color="#fff" />
                 </TouchableOpacity>
             )}
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8f9fa', padding: 15 },
-    card: {
-        backgroundColor: '#fff',
-        borderRadius: 12,
-        padding: 15,
-        marginBottom: 15,
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        shadowOffset: { width: 0, height: 2 }
-    },
-    header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
-    headerText: { marginLeft: 10 },
-    actions: { flexDirection: 'row', marginLeft: 10 },
-    title: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-    author: { fontSize: 12, color: '#888', marginTop: 2 },
-    message: { fontSize: 14, color: '#555', lineHeight: 20 },
-    noData: { textAlign: 'center', marginTop: 50, color: '#aaa', fontSize: 16 },
-    fab: {
-        position: 'absolute',
-        bottom: 20,
-        right: 20,
-        backgroundColor: '#4834d4',
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        justifyContent: 'center',
-        alignItems: 'center',
-        elevation: 5
-    }
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    list: { padding: 16, paddingBottom: 100 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
+    pageTitle: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 16 },
+    card: { backgroundColor: COLORS.bgCard, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+    cardHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+    iconBadge: { width: 36, height: 36, borderRadius: 10, backgroundColor: COLORS.accentLight, justifyContent: 'center', alignItems: 'center' },
+    title: { fontSize: 16, fontWeight: 'bold', color: COLORS.textPrimary },
+    meta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 3 },
+    message: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 },
+    actions: { flexDirection: 'row', gap: 4 },
+    iconBtn: { padding: 4 },
+    noData: { color: COLORS.textMuted, marginTop: 12, fontSize: 15 },
+    fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: COLORS.accent, width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', elevation: 6 },
 });
 
 export default AnnouncementsScreen;

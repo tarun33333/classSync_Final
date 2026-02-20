@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, Button, TouchableOpacity, Alert, Modal, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity, Alert, ActivityIndicator, Platform, StatusBar } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { PieChart } from 'react-native-chart-kit';
 import client from '../api/client';
 import * as FileSystem from 'expo-file-system';
 const { StorageAccessFramework } = FileSystem;
 import * as Sharing from 'expo-sharing';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useTheme } from '../context/ThemeContext';
 
 const screenWidth = Dimensions.get('window').width;
 
 const TeacherReportsScreen = () => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [sessions, setSessions] = useState([]);
@@ -164,143 +169,148 @@ const TeacherReportsScreen = () => {
     ] : [];
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Select Date:</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.datePickerBtn}>
-                    <Text style={styles.dateText}>{selectedDate.toDateString()}</Text>
-                </TouchableOpacity>
-                {showDatePicker && (
-                    <DateTimePicker
-                        testID="dateTimePicker"
-                        value={selectedDate}
-                        mode="date"
-                        display="default"
-                        onChange={onDateChange}
-                    />
-                )}
-            </View>
-
-            {loading && <ActivityIndicator size="large" color="#0000ff" />}
-
-            {!loading && sessions.length === 0 && (
-                <Text style={styles.noData}>No sessions found for this date.</Text>
-            )}
-
-            {sessions.length > 0 && (
-                <View style={styles.sessionSelector}>
-                    <Text style={styles.label}>Select Class:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        {sessions.map(session => (
-                            <TouchableOpacity
-                                key={session.sessionId}
-                                style={[styles.sessionChip, selectedSession === session.sessionId && styles.selectedChip]}
-                                onPress={() => setSelectedSession(session.sessionId)}
-                            >
-                                <Text style={[styles.chipText, selectedSession === session.sessionId && styles.selectedChipText]}>
-                                    {session.subject} ({session.section})
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
-                </View>
-            )}
-
-            {stats && (
-                <View style={styles.statsContainer}>
-                    <Text style={styles.chartTitle}>Attendance Overview</Text>
-
-                    {stats.present + stats.absent > 0 ? (
-                        <PieChart
-                            data={pieData}
-                            width={screenWidth - 40}
-                            height={220}
-                            chartConfig={chartConfig}
-                            accessor={"population"}
-                            backgroundColor={"transparent"}
-                            paddingLeft={"15"}
-                            center={[10, 0]}
-                            absolute
-                        />
-                    ) : (
-                        <Text style={styles.noData}>No attendance marked.</Text>
-                    )}
-
-                    <View style={styles.countRow}>
-                        <View style={styles.countBox}>
-                            <Text style={styles.countLabel}>Present</Text>
-                            <Text style={[styles.countValue, { color: 'green' }]}>{stats.present}</Text>
-                        </View>
-                        <View style={styles.countBox}>
-                            <Text style={styles.countLabel}>Absent</Text>
-                            <Text style={[styles.countValue, { color: 'red' }]}>{stats.absent}</Text>
-                        </View>
-                        <View style={styles.countBox}>
-                            <Text style={styles.countLabel}>Total</Text>
-                            <Text style={styles.countValue}>{stats.present + stats.absent}</Text>
-                        </View>
-                    </View>
-
-                    <TouchableOpacity style={styles.downloadBtn} onPress={downloadExcel}>
-                        <Text style={styles.downloadText}>Download Excel Report</Text>
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+            <ScrollView style={styles.container}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>Date:</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.datePickerBtn}>
+                        <Text style={styles.dateText}>{selectedDate.toDateString()}</Text>
                     </TouchableOpacity>
-
-                    {/* Student List Table */}
-                    <Text style={styles.tableTitle}>Student List</Text>
-                    <View style={styles.table}>
-                        <View style={[styles.tableRow, styles.tableHeader]}>
-                            <Text style={[styles.cell, { flex: 2 }]}>Name</Text>
-                            <Text style={[styles.cell, { flex: 1 }]}>Roll</Text>
-                            <Text style={[styles.cell, { flex: 1 }]}>Status</Text>
-                        </View>
-                        {studentList.map((item, index) => (
-                            <View key={index} style={styles.tableRow}>
-                                <Text style={[styles.cell, { flex: 2 }]}>{item.student?.name || 'Unknown'}</Text>
-                                <Text style={[styles.cell, { flex: 1 }]}>{item.student?.rollNumber || '-'}</Text>
-                                <Text style={[styles.cell, { flex: 1, color: item.status === 'present' ? 'green' : 'red', fontWeight: 'bold' }]}>
-                                    {item.status.toUpperCase()}
-                                </Text>
-                            </View>
-                        ))}
-                    </View>
-
+                    {showDatePicker && (
+                        <DateTimePicker
+                            testID="dateTimePicker"
+                            value={selectedDate}
+                            mode="date"
+                            display="default"
+                            onChange={onDateChange}
+                        />
+                    )}
                 </View>
-            )}
-        </ScrollView>
+
+                {loading && <ActivityIndicator size="large" color={COLORS.accent} style={{ marginTop: 20 }} />}
+
+                {!loading && sessions.length === 0 && (
+                    <Text style={styles.noData}>No sessions found for this date.</Text>
+                )}
+
+                {sessions.length > 0 && (
+                    <View style={styles.sessionSelector}>
+                        <Text style={styles.label}>Select Class:</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            {sessions.map(session => (
+                                <TouchableOpacity
+                                    key={session.sessionId}
+                                    style={[styles.sessionChip, selectedSession === session.sessionId && styles.selectedChip]}
+                                    onPress={() => setSelectedSession(session.sessionId)}
+                                >
+                                    <Text style={[styles.chipText, selectedSession === session.sessionId && styles.selectedChipText]}>
+                                        {session.subject} ({session.section})
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    </View>
+                )}
+
+                {stats && (
+                    <View style={styles.statsContainer}>
+                        <Text style={styles.chartTitle}>Attendance Overview</Text>
+
+                        {stats.present + stats.absent > 0 ? (
+                            <PieChart
+                                data={pieData}
+                                width={screenWidth - 40}
+                                height={220}
+                                chartConfig={chartConfig}
+                                accessor={"population"}
+                                backgroundColor={"transparent"}
+                                paddingLeft={"15"}
+                                center={[10, 0]}
+                                absolute
+                            />
+                        ) : (
+                            <Text style={styles.noData}>No attendance marked.</Text>
+                        )}
+
+                        <View style={styles.countRow}>
+                            <View style={styles.countBox}>
+                                <Text style={styles.countLabel}>Present</Text>
+                                <Text style={[styles.countValue, { color: 'green' }]}>{stats.present}</Text>
+                            </View>
+                            <View style={styles.countBox}>
+                                <Text style={styles.countLabel}>Absent</Text>
+                                <Text style={[styles.countValue, { color: 'red' }]}>{stats.absent}</Text>
+                            </View>
+                            <View style={styles.countBox}>
+                                <Text style={styles.countLabel}>Total</Text>
+                                <Text style={styles.countValue}>{stats.present + stats.absent}</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity style={styles.downloadBtn} onPress={downloadExcel}>
+                            <Text style={styles.downloadText}>Download Excel Report</Text>
+                        </TouchableOpacity>
+
+                        {/* Student List Table */}
+                        <Text style={styles.tableTitle}>Student List</Text>
+                        <View style={styles.table}>
+                            <View style={[styles.tableRow, styles.tableHeader]}>
+                                <Text style={[styles.cell, { flex: 2 }]}>Name</Text>
+                                <Text style={[styles.cell, { flex: 1 }]}>Roll</Text>
+                                <Text style={[styles.cell, { flex: 1 }]}>Status</Text>
+                            </View>
+                            {studentList.map((item, index) => (
+                                <View key={index} style={styles.tableRow}>
+                                    <Text style={[styles.cell, { flex: 2 }]}>{item.student?.name || 'Unknown'}</Text>
+                                    <Text style={[styles.cell, { flex: 1 }]}>{item.student?.rollNumber || '-'}</Text>
+                                    <Text style={[styles.cell, { flex: 1, color: item.status === 'present' ? 'green' : 'red', fontWeight: 'bold' }]}>
+                                        {item.status.toUpperCase()}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+
+                    </View>
+                )}
+            </ScrollView>
+        </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1, padding: 20 },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-    headerTitle: { fontSize: 18, marginRight: 10, fontWeight: 'bold' },
-    datePickerBtn: { backgroundColor: '#fff', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
-    dateText: { fontSize: 16, fontWeight: 'bold' },
-    noData: { textAlign: 'center', marginVertical: 20, fontSize: 16, color: '#666' },
+    headerTitle: { fontSize: 16, marginRight: 12, fontWeight: 'bold', color: COLORS.textSecondary },
+    datePickerBtn: { backgroundColor: COLORS.bgCard, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border },
+    dateText: { fontSize: 14, fontWeight: 'bold', color: COLORS.accent },
+    noData: { textAlign: 'center', marginVertical: 20, fontSize: 15, color: COLORS.textMuted },
 
     sessionSelector: { marginBottom: 20 },
-    label: { fontSize: 16, marginBottom: 10, fontWeight: 'bold' },
-    sessionChip: { padding: 10, backgroundColor: '#e0e0e0', borderRadius: 20, marginRight: 10 },
-    selectedChip: { backgroundColor: '#007bff' },
-    chipText: { color: '#333' },
+    label: { fontSize: 14, marginBottom: 10, fontWeight: '700', color: COLORS.textSecondary },
+    sessionChip: { padding: 10, backgroundColor: COLORS.bgCard, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: COLORS.border },
+    selectedChip: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+    chipText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 13 },
     selectedChipText: { color: '#fff' },
 
-    statsContainer: { backgroundColor: 'white', borderRadius: 15, padding: 20, alignItems: 'center', elevation: 3, marginBottom: 30 },
-    chartTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
+    statsContainer: { backgroundColor: COLORS.bgCard, borderRadius: 16, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, marginBottom: 24 },
+    chartTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: COLORS.textPrimary },
 
-    countRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 20, marginBottom: 20 },
+    countRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 18, marginBottom: 18 },
     countBox: { alignItems: 'center' },
-    countLabel: { fontSize: 14, color: '#666' },
-    countValue: { fontSize: 20, fontWeight: 'bold' },
+    countLabel: { fontSize: 12, color: COLORS.textSecondary },
+    countValue: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary },
 
-    downloadBtn: { backgroundColor: '#28a745', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25, width: '100%', alignItems: 'center', marginBottom: 20 },
-    downloadText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+    downloadBtn: { backgroundColor: COLORS.successBg, borderWidth: 1, borderColor: COLORS.success, paddingVertical: 12, paddingHorizontal: 30, borderRadius: 14, width: '100%', alignItems: 'center', marginBottom: 18 },
+    downloadText: { color: COLORS.success, fontSize: 15, fontWeight: 'bold' },
 
-    tableTitle: { fontSize: 18, fontWeight: 'bold', alignSelf: 'flex-start', marginBottom: 10, marginTop: 10 },
-    table: { width: '100%', borderWidth: 1, borderColor: '#eee' },
-    tableRow: { flexDirection: 'row', padding: 10, borderBottomWidth: 1, borderBottomColor: '#eee' },
-    tableHeader: { backgroundColor: '#f9f9f9' },
-    cell: { fontSize: 14 }
+    tableTitle: { fontSize: 15, fontWeight: 'bold', alignSelf: 'flex-start', marginBottom: 10, marginTop: 10, color: COLORS.textPrimary },
+    table: { width: '100%', borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, overflow: 'hidden' },
+    tableRow: { flexDirection: 'row', padding: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+    tableHeader: { backgroundColor: 'rgba(124,106,247,0.1)' },
+    cell: { fontSize: 13, color: COLORS.textPrimary },
 });
 
 export default TeacherReportsScreen;

@@ -89,7 +89,7 @@ const CustomSplashScreen = ({ onFinish }) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0c0c20', // Midnight Blue
+        backgroundColor: '#0f0c29', // Match new dark purple theme
         justifyContent: 'center',
         alignItems: 'center',
     },

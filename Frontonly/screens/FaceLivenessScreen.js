@@ -4,6 +4,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
+import * as SecureStore from 'expo-secure-store';
 
 const { width } = Dimensions.get('window');
 
@@ -57,8 +58,12 @@ const FaceLivenessScreen = () => {
             formData.append('code', code);
             formData.append('method', method);
 
+            const token = await SecureStore.getItemAsync('userToken');
             const response = await client.post('/attendance/mark-with-face', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${token}`,
+                },
             });
 
             Alert.alert('Success', 'Attendance Marked!', [

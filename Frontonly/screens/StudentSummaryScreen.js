@@ -1,193 +1,168 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import {
+    View, Text, StyleSheet, ScrollView, Dimensions,
+    RefreshControl, TouchableOpacity, Alert, StatusBar,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { PieChart, LineChart } from 'react-native-chart-kit';
 import client from '../api/client';
+import { useTheme } from '../context/ThemeContext';
 
 const screenWidth = Dimensions.get('window').width;
 
+const CHART_COLORS = ['#7c6af7', '#26D0CE', '#f59e0b', '#f87171', '#4ade80', '#aa4b6b'];
+
 const StudentSummaryScreen = () => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const [stats, setStats] = useState([]);
     const [graphData, setGraphData] = useState([]);
     const [selectedSem, setSelectedSem] = useState(null);
     const [userCurrentSem, setUserCurrentSem] = useState(1);
     const [refreshing, setRefreshing] = useState(false);
 
-    useEffect(() => {
-        fetchStats();
-    }, [selectedSem]);
+    useEffect(() => { fetchStats(); }, [selectedSem]);
 
     const fetchStats = async () => {
         try {
             const url = selectedSem ? `/attendance/stats?semester=${selectedSem}` : '/attendance/stats';
             const res = await client.get(url);
-
-            // 1. Process Pie Chart Data (Subject-wise)
-            const chartData = res.data.stats.map((item, index) => ({
+            const chartData = res.data.stats.map((item, i) => ({
                 name: item._id,
                 population: item.presentCount,
-                color: getRandomColor(index),
-                legendFontColor: '#7F7F7F',
-                legendFontSize: 15
+                color: CHART_COLORS[i % CHART_COLORS.length],
+                legendFontColor: COLORS.textSecondary,
+                legendFontSize: 13,
             }));
             setStats(chartData);
-
-            // 2. Process Line Graph Data (Semester Trends)
             if (res.data.graphData) {
-                // Ensure semesters are sorted 1, 2, 3...
-                const sorted = res.data.graphData.sort((a, b) => a.semester - b.semester);
-                setGraphData(sorted);
+                setGraphData(res.data.graphData.sort((a, b) => a.semester - b.semester));
             }
-
-            // 3. Set Semesters
             if (!selectedSem) {
                 setUserCurrentSem(res.data.currentSemester);
                 setSelectedSem(res.data.currentSemester);
             }
-        } catch (error) {
-            console.log('Error fetching stats', error);
-        }
+        } catch { }
     };
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        await fetchStats();
-        setRefreshing(false);
-    };
-
-    const getRandomColor = (index) => {
-        const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-        return colors[index % colors.length];
-    };
+    const onRefresh = async () => { setRefreshing(true); await fetchStats(); setRefreshing(false); };
 
     return (
-        <ScrollView
-            style={styles.container}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-            <Text style={styles.title}>Academic Performance</Text>
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
 
-            {/* Line Chart */}
-            <View style={styles.chartContainer}>
-                <Text style={styles.subtitle}>Semester Trends</Text>
-                {graphData.length > 0 ? (
-                    <LineChart
-                        data={{
-                            labels: graphData.map(g => `Sem ${g.semester}`),
-                            datasets: [{
-                                data: graphData.map(g => g.percentage)
-                            }]
-                        }}
-                        width={screenWidth - 40}
-                        height={220}
-                        yAxisSuffix="%"
-                        chartConfig={{
-                            backgroundColor: '#ffffff',
-                            backgroundGradientFrom: '#ffffff',
-                            backgroundGradientTo: '#ffffff',
-                            decimalPlaces: 0,
-                            color: (opacity = 1) => `rgba(0, 0, 255, ${opacity})`,
-                            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                            propsForDots: {
-                                r: '6',
-                                strokeWidth: '2',
-                                stroke: '#2c3e50'
-                            }
-                        }}
-                        bezier
-                        style={{ marginVertical: 8, borderRadius: 16 }}
-                        onDataPointClick={({ value, index }) => {
-                            // index matches the sorted graphData array
-                            const sem = graphData[index].semester;
-                            Alert.alert('Semester Performance', `Semester ${sem}: ${value}% Attendance`);
-                        }}
-                    />
-                ) : (
-                    <Text style={styles.noData}>Not enough data for trends.</Text>
-                )}
-            </View>
+            <ScrollView
+                style={styles.scroll}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} colors={[COLORS.accent]} />
+                }
+            >
+                <Text style={styles.pageTitle}>Academic Performance</Text>
 
-            {/* Semester Selector */}
-            <View style={styles.selectorContainer}>
-                <Text style={styles.selectorTitle}>Select Semester Analysis:</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {Array.from({ length: userCurrentSem }, (_, i) => i + 1).map(sem => (
-                        <TouchableOpacity
-                            key={sem}
-                            style={[styles.semButton, selectedSem === sem && styles.semButtonActive]}
-                            onPress={() => setSelectedSem(sem)}
-                        >
-                            <Text style={[styles.semText, selectedSem === sem && styles.semTextActive]}>
-                                Sem {sem}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
+                {/* Line Chart */}
+                <View style={styles.chartCard}>
+                    <Text style={styles.chartTitle}>Semester Trends</Text>
+                    {graphData.length > 0 ? (
+                        <LineChart
+                            data={{
+                                labels: graphData.map(g => `S${g.semester}`),
+                                datasets: [{ data: graphData.map(g => g.percentage) }],
+                            }}
+                            width={screenWidth - 64}
+                            height={200}
+                            yAxisSuffix="%"
+                            chartConfig={{
+                                backgroundColor: 'transparent',
+                                backgroundGradientFrom: COLORS.bgMid,
+                                backgroundGradientTo: COLORS.bgMid,
+                                decimalPlaces: 0,
+                                color: (opacity = 1) => `rgba(124,106,247,${opacity})`,
+                                labelColor: () => COLORS.textSecondary,
+                                propsForDots: { r: '5', strokeWidth: '2', stroke: COLORS.accent },
+                                propsForBackgroundLines: { stroke: COLORS.border },
+                            }}
+                            bezier
+                            style={{ borderRadius: 12 }}
+                            onDataPointClick={({ value, index }) => {
+                                Alert.alert('Semester Performance', `Semester ${graphData[index].semester}: ${value}%`);
+                            }}
+                        />
+                    ) : (
+                        <Text style={styles.noData}>Not enough data for trends.</Text>
+                    )}
+                </View>
 
-            {/* Pie Chart */}
-            <View style={styles.chartContainer}>
-                <Text style={styles.subtitle}>Subject Breakdown (Sem {selectedSem})</Text>
-                {stats.length > 0 ? (
-                    <PieChart
-                        data={stats}
-                        width={screenWidth - 40}
-                        height={220}
-                        chartConfig={{
-                            color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                        }}
-                        accessor="population"
-                        backgroundColor="transparent"
-                        paddingLeft="15"
-                        absolute
-                    />
-                ) : (
-                    <Text style={styles.noData}>No attendance recorded for Semester {selectedSem}.</Text>
-                )}
-            </View>
+                {/* Semester Selector */}
+                <View style={styles.selectorRow}>
+                    <Text style={styles.selectorLabel}>Semester:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                        {Array.from({ length: userCurrentSem }, (_, i) => i + 1).map(sem => (
+                            <TouchableOpacity
+                                key={sem}
+                                style={[styles.semBtn, selectedSem === sem && styles.semBtnActive]}
+                                onPress={() => setSelectedSem(sem)}
+                            >
+                                <Text style={[styles.semText, selectedSem === sem && styles.semTextActive]}>
+                                    Sem {sem}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </View>
 
-            <View style={styles.summaryBox}>
-                <Text style={styles.summaryText}>
-                    Total Classes Attended (Sem {selectedSem}): {stats.reduce((acc, curr) => acc + curr.population, 0)}
-                </Text>
-            </View>
-        </ScrollView>
+                {/* Pie Chart */}
+                <View style={styles.chartCard}>
+                    <Text style={styles.chartTitle}>Subject Breakdown (Sem {selectedSem})</Text>
+                    {stats.length > 0 ? (
+                        <PieChart
+                            data={stats}
+                            width={screenWidth - 64}
+                            height={200}
+                            chartConfig={{ color: () => COLORS.accent }}
+                            accessor="population"
+                            backgroundColor="transparent"
+                            paddingLeft="10"
+                            absolute
+                        />
+                    ) : (
+                        <Text style={styles.noData}>No attendance recorded for Semester {selectedSem}.</Text>
+                    )}
+                </View>
+
+                {/* Summary */}
+                <View style={styles.summaryCard}>
+                    <Text style={styles.summaryText}>
+                        Total Classes Attended (Sem {selectedSem}):{' '}
+                        <Text style={styles.summaryCount}>
+                            {stats.reduce((acc, curr) => acc + curr.population, 0)}
+                        </Text>
+                    </Text>
+                </View>
+
+                <View style={{ height: 40 }} />
+            </ScrollView>
+        </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20, backgroundColor: '#f5f5f5' },
-    title: { fontSize: 26, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
-    subtitle: { fontSize: 18, fontWeight: '600', marginBottom: 15, color: '#555' },
-    chartContainer: {
-        backgroundColor: '#fff',
-        borderRadius: 15,
-        padding: 15,
-        alignItems: 'center',
-        elevation: 3,
-        marginBottom: 20
-    },
-    selectorContainer: { marginBottom: 20 },
-    selectorTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, color: '#444' },
-    semButton: {
-        backgroundColor: '#eee',
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 20,
-        marginRight: 10
-    },
-    semButtonActive: { backgroundColor: 'blue' },
-    semText: { color: '#333', fontWeight: 'bold' },
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    scroll: { flex: 1, padding: 20 },
+    pageTitle: { fontSize: 24, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 20, textAlign: 'center' },
+    chartCard: { backgroundColor: COLORS.bgCard, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 20, alignItems: 'center' },
+    chartTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 14, alignSelf: 'flex-start' },
+    noData: { color: COLORS.textMuted, marginVertical: 20, textAlign: 'center' },
+    selectorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
+    selectorLabel: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary },
+    semBtn: { backgroundColor: COLORS.bgCard, paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: COLORS.border },
+    semBtnActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+    semText: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 13 },
     semTextActive: { color: '#fff' },
-    noData: { textAlign: 'center', marginVertical: 20, color: '#888' },
-    summaryBox: {
-        backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 10,
-        elevation: 2,
-        alignItems: 'center',
-        marginBottom: 40
-    },
-    summaryText: { fontSize: 16, fontWeight: 'bold', color: '#2c3e50' }
+    summaryCard: { backgroundColor: COLORS.accentLight, borderRadius: 14, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: COLORS.borderAccent },
+    summaryText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
+    summaryCount: { fontSize: 16, fontWeight: 'bold', color: COLORS.accent },
 });
 
 export default StudentSummaryScreen;

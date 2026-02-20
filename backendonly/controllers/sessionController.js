@@ -208,7 +208,21 @@ const endSession = async (req, res) => {
 // @access  Teacher
 const getActiveSession = async (req, res) => {
     try {
-        const session = await Session.findOne({ teacher: req.user._id, isActive: true });
+        // Auto-expire any sessions that started on a previous calendar day
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        await Session.updateMany(
+            { isActive: true, createdAt: { $lt: startOfToday } },
+            { isActive: false, endTime: new Date() }
+        );
+
+        // Only return a session created today
+        const session = await Session.findOne({
+            teacher: req.user._id,
+            isActive: true,
+            createdAt: { $gte: startOfToday }
+        });
         res.json(session);
     } catch (error) {
         res.status(500).json({ message: error.message });

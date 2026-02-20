@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
     faceEmbedding: { type: [Number], default: [] },
     isFaceRegistered: { type: Boolean, default: false },
 
+    // Profile Photo (stored as base64 data URI)
+    profilePhoto: { type: String, default: null },
+
+    // UI Theme preference
+    theme: { type: String, enum: ['dark', 'light'], default: 'dark' },
 
 }, { timestamps: true });
 

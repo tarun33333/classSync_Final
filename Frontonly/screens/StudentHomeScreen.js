@@ -1,12 +1,20 @@
-import React, { useContext, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, ScrollView, Dimensions, StatusBar, Image } from 'react-native';
+import React, { useContext, useState, useEffect, useCallback, useRef } from 'react';
+import {
+    View, Text, StyleSheet, TouchableOpacity,
+    RefreshControl, ScrollView, StatusBar,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../context/AuthContext';
 import client from '../api/client';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatTime } from '../utils/timeUtils';
+import { useTheme } from '../context/ThemeContext';
 
 const StudentHomeScreen = ({ navigation }) => {
+    const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
+    const styles = getStyles(COLORS, GRADIENT, isDark);
+
     const { userInfo } = useContext(AuthContext);
     const [periods, setPeriods] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
@@ -14,21 +22,11 @@ const StudentHomeScreen = ({ navigation }) => {
 
     const fetchDashboard = async () => {
         try {
-            // console.log('Fetching student dashboard...');
             const res = await client.get('/attendance/dashboard');
-            // console.log('Student Dashboard Data:', JSON.stringify(res.data, null, 2));
             setPeriods(res.data);
-
-            // Find active period
             const ongoing = res.data.find(p => p.status === 'ongoing');
-            // console.log('Found ongoing session:', ongoing);
             setActivePeriod(ongoing || null);
-
         } catch (error) {
-            // console.log('Error fetching dashboard', error);
-            if (error.response) {
-                // console.log('Dashboard Error Data:', error.response.data);
-            }
             if (error.response && (error.response.status === 401 || error.response.status === 403)) {
                 navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
             }
@@ -38,15 +36,13 @@ const StudentHomeScreen = ({ navigation }) => {
     useFocusEffect(
         useCallback(() => {
             fetchDashboard();
-
             const intervalId = setInterval(() => {
                 client.get('/attendance/dashboard').then(res => {
                     setPeriods(res.data);
                     const ongoing = res.data.find(p => p.status === 'ongoing');
                     setActivePeriod(ongoing || null);
-                }).catch(err => { /* console.log('Background fetch error', err) */ });
+                }).catch(() => { });
             }, 2000);
-
             return () => clearInterval(intervalId);
         }, [])
     );
@@ -62,221 +58,216 @@ const StudentHomeScreen = ({ navigation }) => {
         navigation.navigate('StudentAttendance', { sessionId, mode });
     };
 
+    const [now, setNow] = useState(new Date());
+
+    // Tick every 30 seconds so the highlight updates without a full refresh
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 30000);
+        return () => clearInterval(timer);
+    }, []);
+
+    // Returns true if the current local time falls within the period's startTime..endTime.
+    // Handles both '09:30' (24h) and '09:30 AM' (12h) formats.
+    const isCurrentPeriod = (start, end) => {
+        if (!start || !end || start === 'Live') return false;
+        const parse = (t) => {
+            const parts = t.trim().split(' ');
+            let [h, m] = parts[0].split(':').map(Number);
+            if (parts[1]) { // 12-hour format
+                if (parts[1].toUpperCase() === 'PM' && h !== 12) h += 12;
+                if (parts[1].toUpperCase() === 'AM' && h === 12) h = 0;
+            }
+            return h * 60 + m;
+        };
+        const cur = now.getHours() * 60 + now.getMinutes();
+        return cur >= parse(start) && cur < parse(end);
+    };
+
     const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
     return (
-        <ScrollView
-            style={styles.container}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-            <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+        <View style={styles.root}>
+            <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+            <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
 
-            {/* Header */}
-            <View style={styles.headerContainer}>
-                <View>
-                    <Text style={styles.greeting}>Hello,</Text>
-                    <Text style={styles.userName}>{userInfo?.name}</Text>
-                </View>
-                <View style={styles.dateBadge}>
-                    <Text style={styles.dateText}>{currentDay}</Text>
-                </View>
-            </View>
-
-            {/* Hero Card for Active Session */}
-            {activePeriod ? (
-                <View style={[styles.heroCard, styles.shadow]}>
-                    <View style={styles.heroHeader}>
-                        <Text style={styles.liveBadge}>🔴 LIVE PROCTORING</Text>
-                        <Text style={styles.heroTime}>{formatTime(activePeriod.startTime)} - {formatTime(activePeriod.endTime)}</Text>
+            <ScrollView
+                style={styles.container}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={COLORS.accent}
+                        colors={[COLORS.accent]}
+                    />
+                }
+            >
+                {/* Header */}
+                <View style={styles.headerContainer}>
+                    <View>
+                        <Text style={styles.greeting}>Hello,</Text>
+                        <Text style={styles.userName}>{userInfo?.name}</Text>
                     </View>
-
-                    <Text style={styles.heroSubject}>{activePeriod.subject}</Text>
-                    <Text style={styles.heroTeacher}>Teacher: {activePeriod.teacherName || 'Faculty'}</Text>
-
-                    <Text style={styles.actionLabel}>Mark Your Attendance:</Text>
-
-                    <View style={styles.buttonRow}>
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.otpBtn]}
-                            onPress={() => handleAction(activePeriod.sessionId, 'otp')}
-                        >
-                            <Ionicons name="keypad-outline" size={24} color="#fff" />
-                            <Text style={styles.btnText}>Enter OTP</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.qrBtn]}
-                            onPress={() => handleAction(activePeriod.sessionId, 'qr')}
-                        >
-                            <Ionicons name="qr-code-outline" size={24} color="#fff" />
-                            <Text style={styles.btnText}>Scan QR</Text>
-                        </TouchableOpacity>
+                    <View style={styles.dateBadge}>
+                        <Text style={styles.dateText}>{currentDay}</Text>
                     </View>
                 </View>
-            ) : (
-                <View style={styles.heroPlaceholder}>
-                    <Ionicons name="cafe-outline" size={40} color="#ccc" />
-                    <Text style={styles.placeholderText}>No classes going on right now.</Text>
-                </View>
-            )}
 
-            {/* Schedule List */}
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
-            <View style={styles.listContainer}>
+                {/* Hero Card for Active Session */}
+                {activePeriod ? (
+                    <View style={styles.heroCard}>
+                        <View style={styles.heroHeader}>
+                            <Text style={styles.liveBadge}>🔴 LIVE</Text>
+                            <Text style={styles.heroTime}>
+                                {formatTime(activePeriod.startTime)} – {formatTime(activePeriod.endTime)}
+                            </Text>
+                        </View>
+                        <Text style={styles.heroSubject}>{activePeriod.subject}</Text>
+                        <Text style={styles.heroTeacher}>Teacher: {activePeriod.teacherName || 'Faculty'}</Text>
+                        <Text style={styles.actionLabel}>Mark Your Attendance:</Text>
+                        <View style={styles.buttonRow}>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: COLORS.accent }]}
+                                onPress={() => handleAction(activePeriod.sessionId, 'otp')}
+                            >
+                                <Ionicons name="keypad-outline" size={22} color="#fff" />
+                                <Text style={styles.btnText}>Enter OTP</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, { backgroundColor: COLORS.accentDark }]}
+                                onPress={() => handleAction(activePeriod.sessionId, 'qr')}
+                            >
+                                <Ionicons name="qr-code-outline" size={22} color="#fff" />
+                                <Text style={styles.btnText}>Scan QR</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                ) : (
+                    <View style={styles.heroPlaceholder}>
+                        <Ionicons name="cafe-outline" size={38} color={COLORS.textMuted} />
+                        <Text style={styles.placeholderText}>No classes going on right now.</Text>
+                    </View>
+                )}
+
+                {/* Quick Actions */}
+                <Text style={styles.sectionTitle}>Quick Actions</Text>
+                <View style={styles.quickGrid}>
+                    {[
+                        { label: 'Weekly Schedule', icon: 'calendar-outline', screen: 'Timetable', params: { role: 'student' }, color: COLORS.accent },
+                        { label: 'Apply On-Duty', icon: 'document-text-outline', screen: 'ODApply', color: '#26D0CE' },
+                        { label: 'Notice Board', icon: 'megaphone-outline', screen: 'Announcements', color: '#aa4b6b' },
+                        { label: 'AI Assistant', icon: 'sparkles-outline', screen: 'AIChat', color: '#f59e0b' },
+                        { label: 'Join Quiz', icon: 'pencil-outline', screen: 'StudentQuizJoin', color: '#4ade80' },
+                    ].map((item) => (
+                        <TouchableOpacity
+                            key={item.screen}
+                            style={styles.quickCard}
+                            onPress={() => navigation.navigate(item.screen, item.params)}
+                        >
+                            <View style={[styles.quickIcon, { backgroundColor: item.color + '33' }]}>
+                                <Ionicons name={item.icon} size={24} color={item.color} />
+                            </View>
+                            <Text style={styles.quickLabel}>{item.label}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+
+                {/* Schedule List */}
+                <Text style={styles.sectionTitle}>Today's Schedule</Text>
                 {periods
                     .filter(p => p.day === currentDay)
                     .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                    .map((item, index) => (
-                        <View key={index} style={[styles.classCard, item.status === 'ongoing' && styles.activeBorder]}>
-                            <View style={styles.timeColumn}>
-                                <Text style={styles.startTime}>{formatTime(item.startTime)}</Text>
-                                <Text style={styles.endTime}>{formatTime(item.endTime)}</Text>
+                    .map((item, index) => {
+                        const isLive = isCurrentPeriod(item.startTime, item.endTime);
+                        return (
+                            <View
+                                key={index}
+                                style={[
+                                    styles.classCard,
+                                    (item.status === 'ongoing' || isLive) && styles.activeBorder,
+                                ]}
+                            >
+                                <View style={styles.timeColumn}>
+                                    <Text style={[styles.startTime, isLive && { color: COLORS.accent }]}>
+                                        {formatTime(item.startTime)}
+                                    </Text>
+                                    <Text style={styles.endTime}>{formatTime(item.endTime)}</Text>
+                                </View>
+                                <View style={styles.infoColumn}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        {isLive && <View style={styles.liveDot} />}
+                                        <Text style={styles.listSubject}>{item.subject}</Text>
+                                    </View>
+                                    <Text style={[
+                                        styles.statusText,
+                                        item.status === 'present' ? styles.statusPresent :
+                                            item.status === 'absent' ? styles.statusAbsent :
+                                                isLive ? styles.statusLive : styles.statusUpcoming
+                                    ]}>
+                                        {isLive && item.status !== 'present' ? 'NOW' :
+                                            item.status ? item.status.toUpperCase() : 'UPCOMING'}
+                                    </Text>
+                                </View>
+                                {item.status === 'present' && (
+                                    <Ionicons name="checkmark-circle" size={22} color={COLORS.success} />
+                                )}
+                                {isLive && item.status !== 'present' && (
+                                    <Ionicons name="radio-button-on" size={18} color={COLORS.danger} />
+                                )}
                             </View>
-                            <View style={styles.infoColumn}>
-                                <Text style={styles.listSubject}>{item.subject}</Text>
-                                <Text style={[
-                                    styles.statusText,
-                                    item.status === 'present' ? styles.statusPresent :
-                                        item.status === 'absent' ? styles.statusAbsent : styles.statusUpcoming
-                                ]}>
-                                    {item.status ? item.status.toUpperCase() : 'UPCOMING'}
-                                </Text>
-                            </View>
-                            {item.status === 'present' && (
-                                <Ionicons name="checkmark-circle" size={24} color="green" />
-                            )}
-                        </View>
-                    ))}
-            </View>
+                        );
+                    })}
 
-            <TouchableOpacity
-                style={styles.fullScheduleBtn}
-                onPress={() => navigation.navigate('Timetable', { role: 'student' })}
-            >
-                <Text style={styles.fullScheduleText}>View Full Weekly Schedule</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.fullScheduleBtn, { marginTop: 15, backgroundColor: '#d1fae5' }]}
-                onPress={() => navigation.navigate('ODApply')}
-            >
-                <Text style={[styles.fullScheduleText, { color: '#065f46' }]}>Apply for On-Duty</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.fullScheduleBtn, { marginTop: 15, backgroundColor: '#E0F7FA' }]}
-                onPress={() => navigation.navigate('Announcements')}
-            >
-                <Text style={[styles.fullScheduleText, { color: '#006064' }]}>📢 Notice Board</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.fullScheduleBtn, { marginTop: 15, backgroundColor: '#F3E5F5' }]}
-                onPress={() => navigation.navigate('AIChat')}
-            >
-                <Text style={[styles.fullScheduleText, { color: '#6A1B9A' }]}>🤖 AI Assistant</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={[styles.fullScheduleBtn, { marginTop: 15, backgroundColor: '#FFF3E0' }]}
-                onPress={() => navigation.navigate('StudentQuizJoin')}
-            >
-                <Text style={[styles.fullScheduleText, { color: '#E65100' }]}>✍️ Join Live Quiz</Text>
-            </TouchableOpacity>
-
-            <View style={{ height: 40 }} />
-        </ScrollView>
+                <View style={{ height: 40 }} />
+            </ScrollView>
+        </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8f9fa', padding: 20 },
-    headerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25, marginTop: 10 },
-    greeting: { fontSize: 16, color: '#666' },
-    userName: { fontSize: 24, fontWeight: '800', color: '#333' },
-    dateBadge: { backgroundColor: '#eef2f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-    dateText: { color: '#555', fontWeight: '600' },
-    shadow: {
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-    },
+const getStyles = (COLORS, GRADIENT, isDark) => StyleSheet.create({
+    root: { flex: 1, backgroundColor: COLORS.bg },
+    container: { flex: 1, padding: 20 },
+    headerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, marginTop: 10 },
+    greeting: { fontSize: 15, color: COLORS.textSecondary },
+    userName: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary },
+    dateBadge: { backgroundColor: COLORS.accentLight, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: COLORS.borderAccent },
+    dateText: { color: COLORS.accent, fontWeight: '700', fontSize: 13 },
     heroCard: {
-        backgroundColor: '#fff',
+        backgroundColor: COLORS.bgCard,
         borderRadius: 20,
         padding: 20,
-        marginBottom: 30,
+        marginBottom: 28,
         borderWidth: 1,
-        borderColor: '#f0f0f0'
+        borderColor: COLORS.border,
     },
     heroHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-    liveBadge: { color: '#ff4757', fontWeight: 'bold', fontSize: 12, backgroundColor: '#ffe0e3', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
-    heroTime: { color: '#666', fontWeight: '600' },
-    heroSubject: { fontSize: 22, fontWeight: 'bold', color: '#2c3e50', marginBottom: 5 },
-    heroTeacher: { fontSize: 14, color: '#7f8c8d', marginBottom: 20 },
-    actionLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 15 },
-    buttonRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    actionBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 14,
-        borderRadius: 12,
-        marginHorizontal: 5
-    },
-    otpBtn: { backgroundColor: '#4834d4' },
-    qrBtn: { backgroundColor: '#130f40' },
-    btnText: { color: '#fff', fontWeight: 'bold', marginLeft: 8 },
-    heroPlaceholder: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 30,
-        marginBottom: 30,
-        borderStyle: 'dashed',
-        borderWidth: 2,
-        borderColor: '#e0e0e0'
-    },
-    placeholderText: { color: '#aaa', marginTop: 10, fontWeight: '500' },
-    sectionTitle: { fontSize: 18, fontWeight: '700', color: '#333', marginBottom: 15 },
-    listContainer: { paddingBottom: 20 },
-    classCard: {
-        backgroundColor: '#fff',
-        flexDirection: 'row',
-        padding: 15,
-        borderRadius: 12,
-        marginBottom: 10,
-        alignItems: 'center',
-        borderLeftWidth: 4,
-        borderLeftColor: '#ddd',
-        elevation: 1
-    },
-    activeBorder: { borderLeftColor: '#4834d4', backgroundColor: '#f0f3ff' },
-    timeColumn: { marginRight: 15, borderRightWidth: 1, borderRightColor: '#eee', paddingRight: 15, alignItems: 'center' },
-    startTime: { fontWeight: 'bold', color: '#333' },
-    endTime: { fontSize: 12, color: '#888' },
+    liveBadge: { color: COLORS.danger, fontWeight: 'bold', fontSize: 12, backgroundColor: COLORS.dangerBg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+    heroTime: { color: COLORS.textSecondary, fontWeight: '600', fontSize: 13 },
+    heroSubject: { fontSize: 22, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 4 },
+    heroTeacher: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 18 },
+    actionLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 12 },
+    buttonRow: { flexDirection: 'row', gap: 10 },
+    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12, gap: 8 },
+    btnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+    heroPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.bgCard, borderRadius: 20, padding: 30, marginBottom: 28, borderStyle: 'dashed', borderWidth: 1, borderColor: COLORS.border },
+    placeholderText: { color: COLORS.textMuted, marginTop: 10, fontWeight: '500' },
+    sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 14, marginTop: 4 },
+    quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 28 },
+    quickCard: { width: '47%', backgroundColor: COLORS.bgCard, borderRadius: 14, padding: 16, alignItems: 'flex-start', borderWidth: 1, borderColor: COLORS.border },
+    quickIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    quickLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textPrimary },
+    classCard: { backgroundColor: COLORS.bgCard, flexDirection: 'row', padding: 14, borderRadius: 12, marginBottom: 10, alignItems: 'center', borderLeftWidth: 3, borderLeftColor: COLORS.border, borderWidth: 1, borderColor: COLORS.border },
+    activeBorder: { borderLeftColor: COLORS.accent, borderLeftWidth: 4, backgroundColor: COLORS.accentLight },
+    liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.danger },
+    timeColumn: { marginRight: 14, borderRightWidth: 1, borderRightColor: COLORS.border, paddingRight: 14, alignItems: 'center' },
+    startTime: { fontWeight: 'bold', color: COLORS.textPrimary, fontSize: 13 },
+    endTime: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
     infoColumn: { flex: 1 },
-    listSubject: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-    statusText: { fontSize: 12, fontWeight: 'bold' },
-    statusPresent: { color: 'green' },
-    statusAbsent: { color: 'red' },
-    statusUpcoming: { color: '#aaa' },
-    fullScheduleBtn: {
-        backgroundColor: '#eef2f5',
-        padding: 15,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 10
-    },
-    fullScheduleText: {
-        color: '#4834d4',
-        fontWeight: 'bold',
-        fontSize: 16
-    }
+    listSubject: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary, marginBottom: 3 },
+    statusText: { fontSize: 11, fontWeight: 'bold' },
+    statusPresent: { color: COLORS.success },
+    statusAbsent: { color: COLORS.danger },
+    statusLive: { color: COLORS.accent },
+    statusUpcoming: { color: COLORS.textMuted },
 });
 
 export default StudentHomeScreen;
