@@ -5,6 +5,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import client from '../api/client';
 import * as SecureStore from 'expo-secure-store';
+import ConfettiCannon from 'react-native-confetti-cannon';
 
 const { width } = Dimensions.get('window');
 
@@ -15,6 +16,7 @@ const FaceLivenessScreen = () => {
     const navigation = useNavigation();
     const route = useRoute();
     const { sessionId, code, method } = route.params;
+    const [showConfetti, setShowConfetti] = useState(false);
 
     const [challenge, setChallenge] = useState('open_mouth');
     const [instruction, setInstruction] = useState('Open Mouth!');
@@ -66,9 +68,10 @@ const FaceLivenessScreen = () => {
                 },
             });
 
-            Alert.alert('Success', 'Attendance Marked!', [
-                { text: 'OK', onPress: () => navigation.navigate('StudentMain') }
-            ]);
+            setShowConfetti(true);
+            setTimeout(() => {
+                navigation.navigate('StudentMain');
+            }, 2500);
 
         } catch (error) {
             const msg = error.response?.data?.message || 'Verification Failed';
@@ -130,6 +133,9 @@ const FaceLivenessScreen = () => {
                     </View>
                 </View>
             </CameraView>
+            {showConfetti && (
+                <ConfettiCannon count={150} origin={{ x: width / 2, y: -20 }} fadeOut={true} />
+            )}
         </View>
     );
 };

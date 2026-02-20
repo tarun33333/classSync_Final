@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, TextInput, StyleSheet, Alert,
-    TouchableOpacity, StatusBar,
+    TouchableOpacity, StatusBar, Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CameraView, Camera } from 'expo-camera';
@@ -9,6 +9,9 @@ import client from '../api/client';
 import * as Network from 'expo-network';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import ConfettiCannon from 'react-native-confetti-cannon';
+
+const { width } = Dimensions.get('window');
 
 let WifiManager;
 try { WifiManager = require('react-native-wifi-reborn').default; } catch { }
@@ -23,6 +26,7 @@ const StudentAttendanceScreen = ({ route, navigation }) => {
     const [scanning, setScanning] = useState(false);
     const [hasPermission, setHasPermission] = useState(null);
     const [scanned, setScanned] = useState(false);
+    const [showConfetti, setShowConfetti] = useState(false);
 
     useEffect(() => {
         (async () => {
@@ -61,9 +65,10 @@ const StudentAttendanceScreen = ({ route, navigation }) => {
         // QR rotates every 5 seconds — no extra verification needed
         try {
             await client.post('/attendance/mark', { sessionId, code: data, method: 'qr' });
-            Alert.alert('✅ Attendance Marked!', 'Marked present via QR.', [
-                { text: 'OK', onPress: () => navigation.navigate('StudentMain') }
-            ]);
+            setShowConfetti(true);
+            setTimeout(() => {
+                navigation.navigate('StudentMain');
+            }, 2500);
         } catch (error) {
             Alert.alert('Error', error.response?.data?.message || 'Invalid QR');
             setScanned(false);
@@ -166,6 +171,9 @@ const StudentAttendanceScreen = ({ route, navigation }) => {
                     </View>
                 )}
             </View>
+            {showConfetti && (
+                <ConfettiCannon count={150} origin={{ x: width / 2, y: -20 }} fadeOut={true} />
+            )}
         </View>
     );
 };

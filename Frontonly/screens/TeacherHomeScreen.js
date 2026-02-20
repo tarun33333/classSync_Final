@@ -1,7 +1,7 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import {
     View, Text, StyleSheet, Alert, FlatList,
-    TouchableOpacity, StatusBar,
+    TouchableOpacity, StatusBar, Animated
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../context/AuthContext';
@@ -15,8 +15,32 @@ const TeacherHomeScreen = ({ navigation }) => {
     const { colors: COLORS, gradient: GRADIENT, isDark } = useTheme();
     const styles = getStyles(COLORS, GRADIENT, isDark);
 
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good Morning ☕';
+        if (hour < 17) return 'Good Afternoon ☀️';
+        if (hour < 21) return 'Good Evening 🌇';
+        return 'Good Night 🌙';
+    };
+
     const { userInfo } = useContext(AuthContext);
     const [routines, setRoutines] = useState([]);
+
+    const [showIntro, setShowIntro] = useState(true);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+    const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+    useEffect(() => {
+        Animated.sequence([
+            Animated.timing(scaleAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.delay(1000),
+            Animated.parallel([
+                Animated.timing(fadeAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+                Animated.timing(scaleAnim, { toValue: 1.1, duration: 500, useNativeDriver: true })
+            ])
+        ]).start(() => setShowIntro(false));
+    }, []);
+
     const [now, setNow] = useState(new Date());
 
     useEffect(() => {
@@ -120,7 +144,7 @@ const TeacherHomeScreen = ({ navigation }) => {
                 ListHeaderComponent={() => (
                     <View style={styles.header}>
                         {/* Greeting */}
-                        <Text style={styles.greeting}>Welcome,</Text>
+                        <Text style={styles.greeting}>{getGreeting()}</Text>
                         <Text style={styles.name}>{userInfo?.name}</Text>
                         <Text style={styles.subtitle}>Your Schedule</Text>
 
@@ -151,6 +175,26 @@ const TeacherHomeScreen = ({ navigation }) => {
                 }
                 contentContainerStyle={styles.list}
             />
+
+            {/* Intro Greeting Animation Overlay */}
+            {showIntro && (
+                <Animated.View style={[
+                    StyleSheet.absoluteFill,
+                    {
+                        backgroundColor: COLORS.bg,
+                        zIndex: 999,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        opacity: fadeAnim,
+                    }
+                ]}>
+                    <LinearGradient colors={GRADIENT} style={StyleSheet.absoluteFill} />
+                    <Animated.View style={{ transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
+                        <Text style={{ fontSize: 32, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 }}>{getGreeting()}</Text>
+                        <Text style={{ fontSize: 44, fontWeight: '900', color: COLORS.textPrimary }}>{userInfo?.name}</Text>
+                    </Animated.View>
+                </Animated.View>
+            )}
         </View>
     );
 };
